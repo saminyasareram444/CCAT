@@ -1,6 +1,7 @@
 package alia;
 
 import java.io.*;
+import java.nio.file.*;
 import java.util.*;
 import static alia.HoverMission.*;
 
@@ -17,6 +18,10 @@ final class AirportMissionTests {
         check(Math.abs(a.elevationM()-30.48)<1e-6,"airport elevation feet converted to metres");
         check(Math.abs(a.sites().get(0).longitude()+115)<1e-6,"runway midpoint used instead of guessed airport position");
         check(airports.get("H01").sites().get(0).heading()==90,"helipad heading and coordinates imported");
+        check(a.sites().get(0).surface()==1&&a.sites().get(0).widthM()==20&&a.sites().get(0).lengthM()>1700,"runway surface, width and physical length are retained");
+        var pad=airports.get("H01").sites().get(0);
+        check(pad.surface()==1&&pad.lengthM()==20&&pad.widthM()==20&&!pad.landingIssue().isEmpty(),"small pad geometry remains inspectable but cannot be used for automatic landing");
+        landingSites();
         AirportDatabase.parse(new BufferedReader(new StringReader(apt.replace("Test Field","Lower Priority"))),airports);
         check(airports.get("KTST").name().equals("Test Field"),"higher-priority scenery wins duplicates");
         AirportDatabase db=new AirportDatabase(new ArrayList<>(airports.values()));
@@ -30,12 +35,13 @@ final class AirportMissionTests {
 
         NativeLink.Position origin=source.pos;
         double lat=origin.lat,lon=origin.lon+.1;
-        var site=new AirportDatabase.Site("Runway 09/27 midpoint",lat,lon,90);
+        var site=new AirportDatabase.Site("Runway 09/27 midpoint",lat,lon,90,1500,30,1);
         var airport=new AirportDatabase.Airport("TEST","Destination",lat,lon,origin.elevation-origin.agl,"Airport",List.of(site));
         AirportPlan plan=new AirportPlan(airport,site,300,90);plan.validateStart(origin);
         signedAirspeed(plan,origin);
+        approach(plan,origin);
         boolean nearRejected=false;
-        try{var nearby=new AirportDatabase.Site("Nearby",origin.lat,origin.lon+.001,0);new AirportPlan(airport,nearby,300,90).validateStart(origin);}catch(IllegalArgumentException ex){nearRejected=true;}
+        try{var nearby=new AirportDatabase.Site("Nearby",origin.lat,origin.lon+.001,0,30,30,1);var nearbyAirport=new AirportDatabase.Airport("NEAR","Nearby",origin.lat,nearby.longitude(),0,"Airport",List.of(nearby));new AirportPlan(nearbyAirport,nearby,300,90).validateStart(origin);}catch(IllegalArgumentException ex){nearRejected=true;}
         check(nearRejected,"insufficient transition distance is rejected, not silently shortened");
         check(plan.distance(origin)>2500&&plan.distance(origin)<100000,"selected destination inside transition envelope");
         check(plan.points(origin).get(plan.points(origin).size()-1).east>500,"airport mode is not restricted to the legacy 500 m route");
@@ -73,6 +79,54 @@ final class AirportMissionTests {
         }
         battery(source);
         System.out.println("PASS: "+checks+" airport / battery checks (scenery parsing, routing, transition gates, destination landing, measured power).");return checks;
+    }
+    private static void landingSites() throws Exception {
+        for(int code:new int[]{1,2,20,38,50,57})check(new AirportDatabase.Site("Paved",36,-115,0,40,30,code).preferred(),"XP12 paved surface variant accepted: "+code);
+        for(int code:new int[]{0,13,14,15})check(!new AirportDatabase.Site("Unsupported",36,-115,0,40,30,code).landingIssue().isEmpty(),"unusable / invisible landing surface rejected: "+code);
+        var grass=new AirportDatabase.Site("Runway 09/27 midpoint",41.5611388,-74.0156021,81,475,16.18,3);
+        var small=new AirportDatabase.Site("Helipad H1",41.5337044,-73.8337453,0,22.9,22.9,1);
+        for(var site:List.of(grass,small,new AirportDatabase.Site("Unknown geometry",36,-115,0))) {
+            var airport=new AirportDatabase.Airport("BLOCK","Fixture",site.latitude(),site.longitude(),100,"Airport",List.of(site));boolean blocked=false;
+            try{new AirportPlan(airport,site,300,90);}catch(IllegalArgumentException ex){blocked=true;}
+            check(blocked,"narrow grass strip / small pad / unknown geometry cannot silently become an automatic landing target");
+        }
+        Path root=Files.createTempDirectory(Paths.get("build/alia"),"airport-fixture-");
+        Path global=root.resolve("Global Scenery/Global Airports/Earth nav data/apt.dat"),custom=root.resolve("Custom Scenery/Override/Earth nav data/apt.dat"),ini=root.resolve("Custom Scenery/scenery_packs.ini");
+        Files.createDirectories(global.getParent());Files.createDirectories(custom.getParent());
+        String apt="A\n1200 test\n17 100 0 0 ONLY Visible Heliport\n1302 gui_label 3D\n102 H1 36.1 -115.1 90 40 30 20 0 0 0 0\n99\n";
+        Files.writeString(global,apt.replace("ONLY","HIDDEN").replace("3D","2D"));Files.writeString(custom,apt);
+        Files.writeString(ini,"SCENERY_PACK Custom Scenery/Override/\nSCENERY_PACK_DISABLED *GLOBAL_AIRPORTS*\n");
+        AirportDatabase db=AirportDatabase.load(root);
+        check(db.size()==1&&db.search("HIDDEN",null,10).isEmpty(),"disabled global airports are not silently re-added by fallback indexing");
+        check(db.search("ONLY",null,10,true,true).size()==1,"default filters accept a modeled paved site with sufficient dimensions");
+        var loaded=db.search("ONLY",null,1).get(0);
+        check(loaded.scenery().equals("3D")&&loaded.source().endsWith("apt.dat")&&loaded.sites().get(0).surface()==20,"scenery metadata and source provenance are retained");
+        var cached=AirportDatabase.load(root).search("ONLY",null,1).get(0);
+        check(cached.equals(loaded),"versioned cache roundtrip preserves exact site dimensions, surface, scenery label and source");
+        Files.writeString(ini,"SCENERY_PACK Custom Scenery/Override/\nSCENERY_PACK *GLOBAL_AIRPORTS*\n");
+        db=AirportDatabase.load(root);
+        check(db.size()==2&&db.search("HIDDEN",null,10,true,true).isEmpty()&&db.search("HIDDEN",null,10,false,false).size()==1,"2D sites can be inspected with filters cleared but are hidden by default");
+    }
+    private static void approach(AirportPlan plan,NativeLink.Position origin) {
+        AirportMission mission=new AirportMission(plan,origin,.6);mission.start(0);double time=0,heading=plan.course(origin);
+        for(int i=0;i<45;i++){time+=.05;mission.update(state(0,0,40,41.5,heading,0,0,0,false,0),time);}
+        for(int i=0;i<65;i++){time+=.05;mission.update(state(0,100,50,51.5,heading,0,38,0,false,75),time);}
+        Point dest=mission.route().get(mission.route().size()-1);time+=.05;
+        Output out=mission.update(state(dest.north,dest.east-3500,300,301.5,90,0,47.6,0,false,90),time);
+        check(out.phase==Phase.APPROACH,"recorded cruise ground speed initiates approach earlier than the old 2.4 km gate");
+        for(int i=0;i<200;i++){time+=.05;out=mission.update(state(dest.north,dest.east-3000,300,301.5,90,0,47.6,0,false,90),time);}
+        check(out.trace.terms.get("targetPitch")>10&&out.trace.target.height==300,"weak braking increases nose-up demand while holding height instead of descending in a fast glide");
+        time+=.05;out=mission.update(state(dest.north,dest.east-1000,300,301.5,90,0,36,0,false,70),time);
+        check(out.trace.terms.get("requestedLift")>0,"approach restores some rotor support already at 70 kt");
+        time+=.05;out=mission.update(state(dest.north,dest.east+100,100,101.5,90,0,20,0,false,40),time);
+        double reducedHeight=out.trace.target.height;
+        check(out.trace.terms.get("approachAlongRemaining")<0&&out.trace.terms.get("approachSpeedTarget")==0,"passing the destination cannot reverse the stopping-distance schedule and demand more forward speed");
+        time+=.05;out=mission.update(state(dest.north,dest.east+1200,100,101.5,90,0,20,0,false,40),time);
+        check(out.trace.target.height<=reducedHeight,"overshoot does not command a climb back to cruise altitude");
+        time+=.05;out=mission.update(state(dest.north,dest.east+1200,70,71.5,90,0,5,0,false,10),time);
+        check(out.phase==Phase.HOVER_CAPTURE,"slow flight enters rotor capture even outside the old 450 m gate");
+        time+=.05;out=mission.update(state(dest.north,dest.east+1200,60,61.5,90,0,0,0,false,0),time);
+        check(out.trace.terms.get("targetEastSpeed")==-12,"rotor recovery uses a 12 m/s bounded target instead of the old slow distant return");
     }
     private static void signedAirspeed(AirportPlan plan,NativeLink.Position origin) {
         // Actual paused-flight IAS, AGL, attitude and velocity from 20261022-172427.

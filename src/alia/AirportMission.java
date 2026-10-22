@@ -13,6 +13,7 @@ final class AirportMission implements MissionController {
     private int waypoint;
     private double lastTime,phaseStart,dwell,lift,pusher,liftIntegral,speedIntegral,approachHeading;
     private double approachStartDistance;
+    private double approachNorth,approachEast,approachEntrySpeed,approachHeight,captureBudget=180;
     private double lowAirspeedSeconds;
     AirportMission(AirportPlan plan,NativeLink.Position start,double hover) {
         plan.validateStart(start);
@@ -42,17 +43,22 @@ final class AirportMission implements MissionController {
         if(lowAirspeedSeconds>2)throw new IllegalStateException("Cruise airspeed below 55 kt for 2 seconds; pause and take over");
         Phase computed=phase;int computedWaypoint=waypoint;double age=time-phaseStart;
         double budget=phase==Phase.CRUISE?Math.max(300,maxRadius/(plan.cruiseKnots()*.514444)*2+180):
-            phase==Phase.APPROACH?Math.max(240,approachStartDistance/6*2+120):180;
+            phase==Phase.APPROACH?Math.max(240,approachStartDistance/8*2+120):phase==Phase.HOVER_CAPTURE?captureBudget:180;
         if(age>budget)throw new IllegalStateException("Airport mission phase timed out: "+phase);
         if(Math.abs(s.pitch)>35||Math.abs(s.roll)>35||s.height>maximumHeight()||s.height<minimumHeight()||Math.hypot(s.north,s.east)>maxRadius)
             throw new IllegalStateException("Aircraft exceeded airport mission limits");
         if((phase==Phase.CRUISE||phase==Phase.TRANSITION)&&s.agl<15&&age>5)
             throw new IllegalStateException("Terrain clearance below 15 m during forward flight");
         double toDestination=Math.hypot(destination.north-s.north,destination.east-s.east),groundSpeed=Math.hypot(s.vNorth,s.vEast);
-        double brakingDistance=Math.max(1600,groundSpeed*groundSpeed/(2*.65)+650);
+        // Reserve a braking segment and a 250 m rotor-only final segment. The old
+        // glide assumed 0.65 m/s² while descending and substantially under-braked.
+        double brakingDistance=Math.max(2200,groundSpeed*groundSpeed/(2*.35)+groundSpeed*8+500);
+        double alongRemaining=(destination.north-s.north)*approachNorth+(destination.east-s.east)*approachEast;
+        double approachSpeedTarget=Math.min(Math.max(0,approachEntrySpeed-.55*age),Math.sqrt(2*.35*Math.max(0,alongRemaining-250)));
+        if(phase==Phase.APPROACH&&forwardAirspeed<45&&groundSpeed<22)approachHeight=Math.min(approachHeight,landingHeight+40);
         Point target=phase==Phase.TAKEOFF?new Point(0,0,40):phase==Phase.CRUISE?route.get(waypoint):destination;
         double heightTarget=phase==Phase.TAKEOFF?40:phase==Phase.CRUISE||phase==Phase.TRANSITION?cruiseHeight:
-            phase==Phase.APPROACH?landingHeight+40+(cruiseHeight-landingHeight-40)*clamp((toDestination-500)/Math.max(500,brakingDistance-500),0,1):
+            phase==Phase.APPROACH?approachHeight:
             phase==Phase.HOVER_CAPTURE?landingHeight+30:landingHeight;
         target=new Point(target.north,target.east,heightTarget);
         double dn=target.north-s.north,de=target.east-s.east,distance=Math.hypot(dn,de);
@@ -65,18 +71,20 @@ final class AirportMission implements MissionController {
         if(phase==Phase.DESCEND)targetClimb=distance>2.5||groundSpeed>.9?0:-clamp((s.agl-clearance)*.25,.2,.75);
         double climbError=targetClimb-s.vUp;
         if(!s.ground&&lift>.2)liftIntegral=clamp(liftIntegral+climbError*dt*.045,-.3,.3);
-        double wingFraction=rotor?0:smooth((forwardAirspeed-40)/30);
+        double wingFraction=rotor?0:phase==Phase.APPROACH?smooth((forwardAirspeed-25)/65):smooth((forwardAirspeed-40)/30);
         double desiredLift=clamp((baseHover+climbError*.1+liftIntegral)*(1-wingFraction),0,.95);
         if(phase==Phase.CRUISE)desiredLift=0;
         if(phase==Phase.TRANSITION&&s.height<20)desiredLift=Math.max(desiredLift,baseHover);
-        double vn=clamp(dn*.32,-6,6),ve=clamp(de*.32,-6,6),v=Math.hypot(vn,ve),cap=phase==Phase.TAKEOFF?2:6;
-        if(v>cap){vn*=cap/v;ve*=cap/v;}
-        double angle=Math.toRadians(s.heading),an=clamp((vn-s.vNorth)*.65,-1.8,1.8),ae=clamp((ve-s.vEast)*.65,-1.8,1.8);
+        double cap=phase==Phase.TAKEOFF||phase==Phase.DESCEND?2:12;
+        double targetSpeed=Math.min(cap,Math.min(distance*.32,Math.sqrt(2*.6*distance)));
+        double vn=distance>.001?dn/distance*targetSpeed:0,ve=distance>.001?de/distance*targetSpeed:0;
+        if(phase==Phase.APPROACH){vn=approachNorth*approachSpeedTarget;ve=approachEast*approachSpeedTarget;}
+        double angle=Math.toRadians(s.heading),an=clamp((vn-s.vNorth)*.65,-2.2,2.2),ae=clamp((ve-s.vEast)*.65,-2.2,2.2);
         double rotorPitch=-Math.toDegrees(Math.atan2(an*Math.cos(angle)+ae*Math.sin(angle),9.80665));
         double rotorRoll=Math.toDegrees(Math.atan2(ae*Math.cos(angle)-an*Math.sin(angle),9.80665));
         double wingPitch=clamp(3+Math.toDegrees(Math.atan2(targetClimb,Math.max(15,forwardAirspeed*.514444))),-8,12);
         double wingRoll=clamp(headingError*.65-s.r*.2,-22,22);
-        if(phase==Phase.APPROACH)wingPitch=Math.max(wingPitch,clamp((groundSpeed-Math.sqrt(2*.65*Math.max(0,toDestination-200)))*.6,0,12));
+        if(phase==Phase.APPROACH)wingPitch=Math.max(wingPitch,clamp(6+(groundSpeed-approachSpeedTarget)*1.25,6,22));
         double blend=rotor?0:phase==Phase.APPROACH?smooth((forwardAirspeed-25)/25):1;
         double pitchTarget=rotorPitch*(1-blend)+wingPitch*blend,rollTarget=rotorRoll*(1-blend)+wingRoll*blend;
         double speedError=plan.cruiseKnots()-forwardAirspeed;
@@ -99,13 +107,20 @@ final class AirportMission implements MissionController {
                 if(dwell>3)change(Phase.CRUISE,time);
             }
             case CRUISE -> {
-                gate=String.format(Locale.ROOT,"Begin approach within %.0f m of the destination; intermediate route legs advance within 300 m.",brakingDistance);
-                if(toDestination<brakingDistance){approachHeading=s.heading;approachStartDistance=toDestination;change(Phase.APPROACH,time);}
+                gate=String.format(Locale.ROOT,"Begin braking within %.0f m; hold height until slow, then capture the destination on rotors.",brakingDistance);
+                if(toDestination<brakingDistance){
+                    approachHeading=s.heading;approachStartDistance=toDestination;approachEntrySpeed=groundSpeed;
+                    approachNorth=(destination.north-s.north)/Math.max(1,toDestination);approachEast=(destination.east-s.east)/Math.max(1,toDestination);
+                    approachHeight=Math.max(s.height,landingHeight+40);change(Phase.APPROACH,time);
+                }
                 else if(distance<300&&waypoint<route.size()-1)waypoint++;
             }
             case APPROACH -> {
-                gate="Ground speed < 12 m/s and destination distance < 450 m; restore lift rotors as airspeed falls.";
-                if(groundSpeed<12&&toDestination<450)change(Phase.HOVER_CAPTURE,time);
+                gate=String.format(Locale.ROOT,"Brake toward %.1f m/s before the 250 m final segment. Ground speed < 10 m/s and IAS < 30 kt enables rotor capture.",approachSpeedTarget);
+                if(groundSpeed<10&&forwardAirspeed<30){
+                    captureBudget=Math.max(180,toDestination/8*2+Math.abs(s.height-landingHeight-30)/1.0+120);
+                    change(Phase.HOVER_CAPTURE,time);
+                }
             }
             case HOVER_CAPTURE -> {
                 gate="Destination error < 2.5 m; ground speed < 0.7 m/s; hover height error < 2 m; |vertical speed| < 0.5 m/s, for 2 s.";
@@ -129,6 +144,7 @@ final class AirportMission implements MissionController {
         terms.put("forwardAirspeedKnots",forwardAirspeed);
         terms.put("destinationDistance",toDestination);terms.put("brakingDistance",brakingDistance);terms.put("phaseSeconds",age);terms.put("settledSeconds",dwell);
         terms.put("underspeedSeconds",lowAirspeedSeconds);
+        if(computed==Phase.APPROACH){terms.put("approachAlongRemaining",alongRemaining);terms.put("approachSpeedTarget",approachSpeedTarget);terms.put("approachHeightHold",approachHeight);}
         String transition=phase!=computed?computed+" → "+phase+": "+gate:waypoint!=computedWaypoint?"Advanced to route leg "+(waypoint+1):"";
         return new Output(pitch,roll,yaw,lift,pusher,distance,phase,waypoint,new Trace(computed,computedWaypoint,target,s,terms,gate,transition));
     }

@@ -123,7 +123,9 @@ public final class AliaFlight {
             Files.writeString(folder.resolve("airport-plan.json"),"{\"airport\":"+ExplainabilityModel.quote(plan.airport().id())+
                 ",\"name\":"+ExplainabilityModel.quote(plan.airport().name())+",\"arrival\":"+ExplainabilityModel.quote(plan.site().name())+
                 ",\"latitude\":"+plan.site().latitude()+",\"longitude\":"+plan.site().longitude()+",\"elevation_m\":"+plan.airport().elevationM()+
-                ",\"cruise_clearance_m\":"+plan.cruiseClearanceM()+",\"cruise_knots\":"+plan.cruiseKnots()+"}\n");
+                ",\"cruise_clearance_m\":"+plan.cruiseClearanceM()+",\"cruise_knots\":"+plan.cruiseKnots()+
+                ",\"surface\":"+ExplainabilityModel.quote(plan.site().surfaceName())+",\"length_m\":"+plan.site().lengthM()+",\"width_m\":"+plan.site().widthM()+
+                ",\"scenery\":"+ExplainabilityModel.quote(plan.airport().scenery())+",\"source\":"+ExplainabilityModel.quote(plan.airport().source())+"}\n");
         }catch(IOException ex){event+=" Mission file could not be saved: "+ex.getMessage();}
     }
     private void connect() throws IOException {

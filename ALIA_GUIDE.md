@@ -43,8 +43,8 @@ The connection is local to `127.0.0.1:49000`. The installed X-Plane preferences 
 
 1. Load ALIA on the ground, prepare power and idle throttles, and connect CCAT.
 2. Open **Mission planner** from the flight window or dashboard. The installed `apt.dat` scenery is indexed in the background. On this installation the index contains 38,331 airports and heliports. Enabled custom scenery takes precedence over the global airport database; disabled packs are skipped.
-3. Search by airport code or name. Select a result and an arrival location: a runway midpoint or a helipad with coordinates from the installed airport data.
-4. Set cruise clearance in metres and cruise indicated airspeed in knots. Defaults are **300 m** above the higher endpoint and **90 kt**. The preview shows geographic coordinates, elevation, direct distance, initial course, cruise MSL altitude and nominal cruise time. This is a direct geographic route, not a terrain-cleared flight plan.
+3. Search by airport code or name. The default **Paved sites ≥ 25 m** and **3D airports** filters show modeled airports with asphalt/concrete runways or pads at least 25 m in both dimensions. Select an arrival location from its scenery records. Clear the filters to inspect other entries; small pads, narrow strips, unknown geometry, water, snow and transparent surfaces cannot be used for automatic landing. The 25 m rule is an experimental clearance filter, not an aircraft certification.
+4. Inspect the **Landing surface** tab: it draws the selected runway/pad at its recorded size and heading, with a 25 m box around the landing centre. Long runways are cropped to a centre detail. This is scenery geometry, not a camera or obstacle check. The summary includes the 2D/3D label, source `apt.dat`, surface, coordinates and elevation. Use the **Route** tab for the origin-to-destination line. Set cruise clearance and indicated airspeed; defaults are **300 m** above the higher endpoint and **90 kt**. This is a direct geographic route, not a terrain-cleared flight plan.
 5. Click **Use airport mission — start separately**. The flight window displays the selected airport and generated route. The input is also saved to `missions/airport-plan.json` for inspection. Selecting a mission does not send flight commands.
 6. Press **Start automatic flight** in the flight window. The route is rebuilt from the aircraft's position at that instant. Startup currently requires a stationary ground start; mid-air mission engagement and changing an active destination are not supported.
 
@@ -55,11 +55,15 @@ The airport controller's configured sequence is:
 | Takeoff | Climb to 40 m above start while aligning with the initial route course. Stabilize height, heading and speed for 2 seconds. |
 | Transition | Ramp up pusher power. Schedule lift-rotor support down between 40 and 70 kt indicated airspeed. Advance after at least 70 kt, height at least 35 m and vertical speed above −1 m/s for 3 seconds. |
 | Cruise | Track the destination route, cruise height and requested airspeed with lift rotors commanded idle. |
-| Approach | Begin deceleration at a distance based on ground speed, with a minimum of 1.6 km. Reduce pusher power and restore rotor support as airspeed falls. |
-| Hover capture | Below 12 m/s ground speed and within 450 m, use rotor position control to capture the selected arrival coordinates at approximately 30 m above the airport elevation. |
+| Approach | Begin braking using `groundSpeed² / (2 × 0.35) + groundSpeed × 8 + 500` metres, with a 2.2 km minimum. Ramp the pusher to idle, hold entry height while fast, and increase nose-up demand if speed is not falling. Rotor support returns progressively below 90 kt. The speed target falls with time and signed distance to a point 250 m short of the destination. |
+| Hover capture | Enter when ground speed is below 10 m/s and IAS below 30 kt. Fly the remaining distance on rotors at a target up to 12 m/s, tapering speed toward the exact landing coordinate; stabilize within 2.5 m before descent. |
 | Descent | After stable capture, descend vertically. Horizontal drift pauses descent. Ground contact sustained for 1 second idles both lift and pusher groups. |
 
 These are controller schedules and gates, not proof of aerodynamic transition or landing performance. The airspeed blend does not measure the actual fraction of lift produced by the wings. Ramp rates, trim, gains and transition thresholds need live ALIA tuning.
+
+The revised approach addresses the recorded fast glide past the destination: it holds entry height while braking instead of descending at cruise speed, restores rotor support earlier, and keeps the stopping calculation signed after passing the landing coordinate. The height target does not rise back toward cruise height after an overshoot. Rotor capture can begin outside the old 450 m gate, and its timeout allows time for the remaining distance and height. The conservative braking schedule may complete the transition to rotors well before the last 250 m.
+
+On this installation, **6N1 / Middle Hope** is a 16.2 m wide grass strip, and **3NK3 / IBM East Fishkill** is a 2D heliport with a 22.9 × 22.9 m asphalt pad. Both are below the new automatic-landing size filter. **KMGJ / Orange County** has 3D scenery and 30.5 m wide asphalt runways. These facts come from the installed airport records; they do not verify obstacle clearance or alignment with other scenery. Inspect the chosen surface in X-Plane before a live run. CCAT does not install or create airport scenery.
 
 Airport-mode planning limits are **2.5–100 km** direct distance, **100–1000 m** cruise clearance above the higher endpoint, and **75–110 kt** cruise setting. Routes outside that envelope are rejected explicitly; they are not silently shortened. Distance and phase timeouts expand with the airport route, replacing the hover mode's 500 m planning radius and 180-second fixed stage timeout. Airport flights use geographic destination coordinates and do not return to the departure point after the route.
 
@@ -221,6 +225,8 @@ From a terminal in this folder:
 The `.cmd` launcher uses an execution-policy override for its own PowerShell process only; it does not change your system execution policy.
 
 ## Technical references
+
+Runway/helipad coordinate fields, dimensions and X-Plane 12 pavement variants are parsed according to the official [apt.dat 12.00 format specification](https://developer.x-plane.com/article/airport-data-apt-dat-12-00-file-format-specification/). The planner retains those fields and the winning scenery file as provenance; it does not substitute an airport reference point for a landing site.
 
 The native packet formats are described in the documentation supplied with this installation:
 

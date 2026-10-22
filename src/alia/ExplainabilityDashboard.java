@@ -230,10 +230,14 @@ final class ExplainabilityDashboard extends JPanel {
         case "yawD" -> "−0.018 × measured yaw rate";
         case "settledSeconds" -> "Current gate dwell timer (s); resets on a transition";
         case "phaseSeconds" -> "Elapsed time in the computed stage (s)";
-        case "wingSupportFraction" -> "Smooth airspeed-based support schedule between 40 and 70 kt; not a measured aerodynamic lift fraction";
+        case "wingSupportFraction" -> "Smooth IAS support schedule: transition 40–70 kt; braking approach 25–90 kt; not measured aerodynamic wing lift";
         case "requestedPusher","appliedPusher" -> "Pusher motor command before / after ramp limit (ratio)";
         case "airspeedKnots","targetAirspeedKnots" -> "Measured / configured indicated airspeed (kt)";
         case "destinationDistance","brakingDistance" -> "Destination distance / approach initiation distance (m)";
+        case "approachAlongRemaining" -> "Signed distance along approach to landing point (m); negative after passing it";
+        case "approachSpeedTarget" -> "Braking speed target (m/s), limited by time and remaining stopping distance";
+        case "approachHeightHold" -> "Approach height target (m above origin); held until slow, then reduced";
+        case "forwardAirspeedKnots" -> "Nonnegative forward IAS for control scheduling (kt); signed measurement is retained";
         default -> "Exact recorded controller intermediate value";
     };}
     private static Graphics2D graphics(Graphics g){Graphics2D x=(Graphics2D)g.create();x.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_ON);x.setFont(font(10,0));return x;}

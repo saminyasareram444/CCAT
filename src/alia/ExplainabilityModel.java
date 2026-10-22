@@ -151,6 +151,8 @@ final class ExplainabilityModel implements AutoCloseable {
                 v.get("airspeedKnots"),v.get("targetAirspeedKnots"),t.target.height,t.state.height,output.lift*100,output.pusher*100,rotorShare*100);
             if(v.containsKey("forwardAirspeedKnots")&&v.get("airspeedKnots")<0)
                 rationale+=" Signed IAS is below zero; forward-speed scheduling uses 0 kt.";
+            if(t.computedPhase==HoverMission.Phase.APPROACH&&v.containsKey("approachSpeedTarget"))
+                rationale+=String.format(Locale.ROOT," Braking speed target %.1f m/s; signed distance along approach %.0f m. Height is held until slow.",v.get("approachSpeedTarget"),v.get("approachAlongRemaining"));
             factors.add(new Factor("Base hover contribution",v.get("baseLift")*rotorShare,"Operator hover setting × rotor-support share; output limits may apply."));
             factors.add(new Factor("Vertical-speed correction",v.get("verticalP")*rotorShare,"0.10 × (desired climb − measured climb) × rotor share."));
             factors.add(new Factor("Accumulated correction",v.get("verticalI")*rotorShare,"Integrated climb error × rotor share; output limits may apply."));

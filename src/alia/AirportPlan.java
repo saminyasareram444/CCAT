@@ -6,6 +6,8 @@ import java.util.*;
 record AirportPlan(AirportDatabase.Airport airport,AirportDatabase.Site site,double cruiseClearanceM,double cruiseKnots) {
     AirportPlan {
         Objects.requireNonNull(airport);Objects.requireNonNull(site);
+        if(!airport.sites().contains(site))throw new IllegalArgumentException("Choose a landing site from the selected airport's scenery records");
+        if(!site.landingIssue().isEmpty())throw new IllegalArgumentException(site.description()+": "+site.landingIssue());
         if(!AirportDatabase.valid(site.latitude(),site.longitude())||!Double.isFinite(airport.elevationM()))throw new IllegalArgumentException("Airport coordinates or elevation unavailable");
         if(!Double.isFinite(cruiseClearanceM)||cruiseClearanceM<100||cruiseClearanceM>1000)throw new IllegalArgumentException("Cruise clearance must be 100–1000 m above the higher endpoint");
         if(!Double.isFinite(cruiseKnots)||cruiseKnots<75||cruiseKnots>110)throw new IllegalArgumentException("Cruise airspeed must be 75–110 kt");

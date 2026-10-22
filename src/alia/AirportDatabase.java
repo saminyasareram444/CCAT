@@ -8,8 +8,24 @@ import java.util.*;
 
 /** Reads enabled X-Plane apt.dat scenery in priority order; caches the small searchable index locally. */
 final class AirportDatabase {
-    record Site(String name,double latitude,double longitude,double heading) {public String toString(){return name;}}
-    record Airport(String id,String name,double latitude,double longitude,double elevationM,String type,List<Site> sites) {
+    record Site(String name,double latitude,double longitude,double heading,double lengthM,double widthM,int surface) {
+        Site(String name,double latitude,double longitude,double heading){this(name,latitude,longitude,heading,Double.NaN,Double.NaN,0);}
+        boolean paved(){return surface==1||surface==2||surface>=20&&surface<=38||surface>=50&&surface<=57;}
+        boolean visibleSurface(){return paved()||surface>=3&&surface<=5||surface==12||surface==14;}
+        String surfaceName(){return paved()?(surface==2||surface>=50?"Concrete":"Asphalt"):switch(surface){case 3->"Grass";case 4->"Dirt";case 5->"Gravel";case 12->"Dry lakebed";case 13->"Water";case 14->"Snow / ice";case 15->"Transparent (no markings)";default->"Unknown surface ("+surface+")";};}
+        String landingIssue(){
+            if(!valid(latitude,longitude)||!Double.isFinite(heading))return "Landing coordinates or heading unavailable";
+            if(!visibleSurface()||surface==14)return "Automatic landing requires a visible land surface; this site is "+surfaceName();
+            if(!Double.isFinite(lengthM)||!Double.isFinite(widthM)||lengthM<25||widthM<25)
+                return "Automatic landing requires at least 25 m in both dimensions (experimental ALIA clearance rule)";
+            return "";
+        }
+        boolean preferred(){return paved()&&landingIssue().isEmpty();}
+        String description(){return String.format(Locale.ROOT,"%s | %s | %.1f × %.1f m",name,surfaceName(),lengthM,widthM);}
+        public String toString(){return description();}
+    }
+    record Airport(String id,String name,double latitude,double longitude,double elevationM,String type,List<Site> sites,String scenery,String source) {
+        Airport(String id,String name,double latitude,double longitude,double elevationM,String type,List<Site> sites){this(id,name,latitude,longitude,elevationM,type,sites,"Unknown","Offline fixture");}
         Airport {sites=List.copyOf(sites);}
         public String toString(){return id+" — "+name;}
     }
@@ -17,40 +33,44 @@ final class AirportDatabase {
     AirportDatabase(List<Airport> airports){this.airports=List.copyOf(airports);}
     int size(){return airports.size();}
     List<Airport> search(String query,NativeLink.Position origin,int limit) {
+        return search(query,origin,limit,false,false);
+    }
+    List<Airport> search(String query,NativeLink.Position origin,int limit,boolean preferredOnly,boolean threeDOnly) {
         String q=query.strip().toLowerCase(Locale.ROOT);
         return airports.stream().filter(a->q.isEmpty()||a.id().toLowerCase(Locale.ROOT).contains(q)||a.name().toLowerCase(Locale.ROOT).contains(q))
+            .filter(a->!preferredOnly||a.sites().stream().anyMatch(Site::preferred)).filter(a->!threeDOnly||a.scenery().equals("3D"))
             .sorted(Comparator.<Airport>comparingInt(a->a.id().equalsIgnoreCase(query.strip())?0:1)
                 .thenComparingDouble(a->origin==null?0:distance(origin.lat,origin.lon,a.latitude,a.longitude))
                 .thenComparing(Airport::id)).limit(limit).toList();
     }
     static AirportDatabase load(Path root) throws IOException {
         List<Path> sources=sources(root);if(sources.isEmpty())throw new IOException("No apt.dat airport database found. Select the X-Plane 12 installation folder.");
-        StringBuilder signature=new StringBuilder("CCAT-airports-v2");
+        StringBuilder signature=new StringBuilder("CCAT-airports-v3");
         for(Path file:sources)signature.append('|').append(file.toAbsolutePath()).append(':').append(Files.size(file)).append(':').append(Files.getLastModifiedTime(file).toMillis());
         String fingerprint=signature.toString();Path cache=Paths.get("build/alia/airport-index.bin");
         if(Files.isRegularFile(cache))try(DataInputStream in=new DataInputStream(new BufferedInputStream(Files.newInputStream(cache)))) {
             if(in.readUTF().equals(fingerprint)) {
                 int size=in.readInt();if(size<0||size>100000)throw new IOException("Invalid airport cache");List<Airport> list=new ArrayList<>();
                 for(int i=0;i<size;i++) {
-                    String id=in.readUTF(),name=in.readUTF(),type=in.readUTF();double lat=in.readDouble(),lon=in.readDouble(),elev=in.readDouble();
+                    String id=in.readUTF(),name=in.readUTF(),type=in.readUTF(),scenery=in.readUTF(),source=in.readUTF();double lat=in.readDouble(),lon=in.readDouble(),elev=in.readDouble();
                     int count=in.readInt();if(count<0||count>1000)throw new IOException("Invalid landing sites");List<Site> sites=new ArrayList<>();
-                    for(int j=0;j<count;j++)sites.add(new Site(in.readUTF(),in.readDouble(),in.readDouble(),in.readDouble()));
-                    list.add(new Airport(id,name,lat,lon,elev,type,sites));
+                    for(int j=0;j<count;j++)sites.add(new Site(in.readUTF(),in.readDouble(),in.readDouble(),in.readDouble(),in.readDouble(),in.readDouble(),in.readInt()));
+                    list.add(new Airport(id,name,lat,lon,elev,type,sites,scenery,source));
                 }
                 return new AirportDatabase(list);
             }
         }catch(IOException ignored){}
         Map<String,Airport> index=new LinkedHashMap<>();
         for(Path source:sources)try(BufferedReader reader=new BufferedReader(new InputStreamReader(Files.newInputStream(source),
-            StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPLACE).onUnmappableCharacter(CodingErrorAction.REPLACE)))){parse(reader,index);}
+            StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPLACE).onUnmappableCharacter(CodingErrorAction.REPLACE)))){parse(reader,index,source.toString());}
         List<Airport> list=new ArrayList<>(index.values());
         try {
             Files.createDirectories(cache.getParent());
             try(DataOutputStream out=new DataOutputStream(new BufferedOutputStream(Files.newOutputStream(cache)))) {
                 out.writeUTF(fingerprint);out.writeInt(list.size());
                 for(Airport a:list) {
-                    out.writeUTF(a.id);out.writeUTF(a.name);out.writeUTF(a.type);out.writeDouble(a.latitude);out.writeDouble(a.longitude);out.writeDouble(a.elevationM);out.writeInt(a.sites.size());
-                    for(Site s:a.sites){out.writeUTF(s.name);out.writeDouble(s.latitude);out.writeDouble(s.longitude);out.writeDouble(s.heading);}
+                    out.writeUTF(a.id);out.writeUTF(a.name);out.writeUTF(a.type);out.writeUTF(a.scenery);out.writeUTF(a.source);out.writeDouble(a.latitude);out.writeDouble(a.longitude);out.writeDouble(a.elevationM);out.writeInt(a.sites.size());
+                    for(Site s:a.sites){out.writeUTF(s.name);out.writeDouble(s.latitude);out.writeDouble(s.longitude);out.writeDouble(s.heading);out.writeDouble(s.lengthM);out.writeDouble(s.widthM);out.writeInt(s.surface);}
                 }
             }
         }catch(IOException ignored){} // A read-only cache location must not prevent airport selection.
@@ -59,37 +79,42 @@ final class AirportDatabase {
     private static List<Path> sources(Path root) throws IOException {
         List<Path> files=new ArrayList<>();Path packs=root.resolve("Custom Scenery/scenery_packs.ini");
         Path global=root.resolve("Global Scenery/Global Airports/Earth nav data/apt.dat");
+        boolean globalListed=false;
         if(Files.isRegularFile(packs))for(String line:Files.readAllLines(packs,StandardCharsets.UTF_8)) {
+            if((line.startsWith("SCENERY_PACK ")||line.startsWith("SCENERY_PACK_DISABLED "))&&line.contains("*GLOBAL_AIRPORTS*"))globalListed=true;
             if(!line.startsWith("SCENERY_PACK "))continue;String path=line.substring(13).strip();
             Path file=path.equals("*GLOBAL_AIRPORTS*")?global:root.resolve(path).resolve("Earth nav data/apt.dat");
             if(Files.isRegularFile(file)&&!files.contains(file))files.add(file);
         }
-        if(Files.isRegularFile(global)&&!files.contains(global))files.add(global);return files;
+        if(!globalListed&&Files.isRegularFile(global)&&!files.contains(global))files.add(global);return files;
     }
     static void parse(BufferedReader reader,Map<String,Airport> result) throws IOException {
+        parse(reader,result,"apt.dat fixture");
+    }
+    private static void parse(BufferedReader reader,Map<String,Airport> result,String source) throws IOException {
         Builder current=null;String line;
         while((line=reader.readLine())!=null) {
             line=line.stripLeading();
             if(code(line,"1")||code(line,"16")||code(line,"17")) {
                 if(current!=null)current.finish(result);String[] p=line.split("\\s+",6);
-                current=null;if(p.length==6)try{current=new Builder(p[4],p[5],Double.parseDouble(p[1])*.3048,p[0].equals("17")?"Heliport":p[0].equals("16")?"Seaplane base":"Airport");}catch(NumberFormatException ignored){}
+                current=null;if(p.length==6)try{current=new Builder(p[4],p[5],Double.parseDouble(p[1])*.3048,p[0].equals("17")?"Heliport":p[0].equals("16")?"Seaplane base":"Airport");current.source=source;}catch(NumberFormatException ignored){}
             }else if(current!=null)try {
                 if(code(line,"100")) {
                     String[] p=line.split("\\s+");if(p.length>=20) {
                         double lat1=Double.parseDouble(p[9]),lon1=Double.parseDouble(p[10]),lat2=Double.parseDouble(p[18]),lon2=Double.parseDouble(p[19]);
                         if(valid(lat1,lon1)&&valid(lat2,lon2)) {
                             double[] mid=interpolate(lat1,lon1,lat2,lon2,.5);
-                            current.sites.add(new Site("Runway "+p[8]+"/"+p[17]+" midpoint",mid[0],mid[1],bearing(lat1,lon1,lat2,lon2)));
+                            current.sites.add(new Site("Runway "+p[8]+"/"+p[17]+" midpoint",mid[0],mid[1],bearing(lat1,lon1,lat2,lon2),distance(lat1,lon1,lat2,lon2),Double.parseDouble(p[1]),Integer.parseInt(p[2])));
                         }
                     }
                 }else if(code(line,"102")) {
-                    String[] p=line.split("\\s+");if(p.length>=5) {
+                    String[] p=line.split("\\s+");if(p.length>=8) {
                         double lat=Double.parseDouble(p[2]),lon=Double.parseDouble(p[3]);
-                        if(valid(lat,lon))current.sites.add(new Site("Helipad "+p[1],lat,lon,Double.parseDouble(p[4])));
+                        if(valid(lat,lon))current.sites.add(new Site("Helipad "+p[1],lat,lon,Double.parseDouble(p[4]),Double.parseDouble(p[5]),Double.parseDouble(p[6]),Integer.parseInt(p[7])));
                     }
                 }else if(code(line,"1302")) {
                     String[] p=line.split("\\s+",3);if(p.length==3)switch(p[1]) {
-                        case "datum_lat" -> current.lat=Double.parseDouble(p[2]);case "datum_lon" -> current.lon=Double.parseDouble(p[2]);case "icao_code" -> current.icao=p[2];default -> {}
+                        case "datum_lat" -> current.lat=Double.parseDouble(p[2]);case "datum_lon" -> current.lon=Double.parseDouble(p[2]);case "icao_code" -> current.icao=p[2];case "gui_label" -> current.scenery=p[2];default -> {}
                     }
                 }
                 else if(line.equals("99")){current.finish(result);current=null;}
@@ -99,12 +124,12 @@ final class AirportDatabase {
     }
     private static boolean code(String line,String code){return line.startsWith(code)&&line.length()>code.length()&&Character.isWhitespace(line.charAt(code.length()));}
     private static final class Builder {
-        String id,name,type,icao="";double elevation,lat=Double.NaN,lon=Double.NaN;List<Site> sites=new ArrayList<>();
+        String id,name,type,icao="",scenery="Unknown",source="";double elevation,lat=Double.NaN,lon=Double.NaN;List<Site> sites=new ArrayList<>();
         Builder(String id,String name,double elevation,String type){this.id=id;this.name=name;this.elevation=elevation;this.type=type;}
         void finish(Map<String,Airport> result) {
             if(!valid(lat,lon)&&!sites.isEmpty()){lat=sites.get(0).latitude;lon=sites.get(0).longitude;}
             if(!valid(lat,lon))return;String code=icao.isBlank()?id:icao;
-            result.putIfAbsent(code,new Airport(code,name,lat,lon,elevation,type,sites));
+            result.putIfAbsent(code,new Airport(code,name,lat,lon,elevation,type,sites,scenery,source));
         }
     }
     static boolean valid(double lat,double lon){return Double.isFinite(lat)&&Double.isFinite(lon)&&Math.abs(lat)<=90&&Math.abs(lon)<=180;}
