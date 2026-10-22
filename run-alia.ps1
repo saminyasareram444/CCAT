@@ -22,7 +22,7 @@ $classes = Join-Path $PSScriptRoot 'build\alia\classes'
 New-Item -ItemType Directory -Path $classes -Force | Out-Null
 $sources = @(Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'src\alia') -Filter '*.java' -File | ForEach-Object { $_.FullName })
 if ($Test) { $sources += @(Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'tests\alia') -Filter '*.java' -File | ForEach-Object { $_.FullName }) }
-& (Join-Path $jdkBin 'javac.exe') -source 17 -target 17 -Xlint:-options -encoding UTF-8 -d $classes $sources
+& (Join-Path $jdkBin 'javac.exe') --release 25 -encoding UTF-8 -d $classes $sources
 if ($LASTEXITCODE -ne 0) { throw 'ALIA compilation failed.' }
 if ($BuildOnly) { Write-Host 'ALIA compiled successfully.'; exit 0 }
 if ($Test) { & (Join-Path $jdkBin 'java.exe') -cp $classes alia.AliaTests }

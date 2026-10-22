@@ -35,7 +35,7 @@ The extension uses those motor assignments. It controls pitch, roll, and yaw thr
 6. The flight-controls window and the **live explainability dashboard** open together. Monitoring connects automatically and does not engage flight controls. Use **Connect / monitor** to reconnect if needed. **Raw telemetry** on the dashboard opens the detailed numeric telemetry window.
 7. Wait for **LIVE** and **ALIA-250**. Review the route, then click **Start automatic flight** when ready.
 
-The launcher finds the JDK supplied by your installed VS Code Java extension. It can also use a JDK from PATH or JAVA_HOME. It builds this mode independently; Maven, Python, the missing Soar files, and the NASA XPlaneConnect plugin are not required.
+The launcher requires JDK 25 or newer. It finds the JDK supplied by your installed VS Code Java extension, or uses a JDK from PATH or JAVA_HOME. It builds this mode independently; Maven, Python, the missing Soar files, and the NASA XPlaneConnect plugin are not required.
 
 The connection is local to `127.0.0.1:49000`. The installed X-Plane preferences currently use receive port 49000. No manual Data Output row selections are necessary for RPOS/RREF requests. If connection fails, check X-Plane's Settings → Network → UDP Ports and local firewall permission for Java.
 
@@ -64,6 +64,10 @@ These are controller schedules and gates, not proof of aerodynamic transition or
 Airport-mode planning limits are **2.5–100 km** direct distance, **100–1000 m** cruise clearance above the higher endpoint, and **75–110 kt** cruise setting. Routes outside that envelope are rejected explicitly; they are not silently shortened. Distance and phase timeouts expand with the airport route, replacing the hover mode's 500 m planning radius and 180-second fixed stage timeout. Airport flights use geographic destination coordinates and do not return to the departure point after the route.
 
 Cruise clearance does not inspect intervening terrain. Airport elevation and landing coordinates come from scenery metadata and may not identify a clear or obstacle-free landing surface. A low terrain-clearance guard during forward flight requests pause/takeover; it does not compute a reroute. Cruise indicated airspeed below **55 kt for 2 seconds** also requests takeover; that is an experimental controller guard, not an aircraft stall-speed certification. Reserve checks require at least **25% measured charge in every pack at airport-mission start**; below **15%** or missing charge data during an airport mission requests pause/takeover. Those thresholds do not guarantee enough energy to reach the destination.
+
+X-Plane can report slightly negative indicated airspeed near hover. The controller retains the signed measurement in telemetry and uses zero forward airspeed for control scheduling when it is negative. This does not interrupt vertical takeoff or landing. The 70 kt transition gate and 55 kt cruise underspeed guard remain active; missing or non-finite airspeed still stops the mission. The exact trace records both `airspeedKnots` (measured) and `forwardAirspeedKnots` (used for scheduling).
+
+If an older version stopped just after liftoff with **"Valid indicated airspeed is required for transition flight"**, close CCAT and restart it with `run-alia.cmd` to load this fix. Reset ALIA on the ground with engines running, set both throttles to idle, unpause X-Plane, select the airport mission again, and start a new flight. A stopped mission cannot resume in midair.
 
 Use **Use hover test** to return to the original rotor-only mission input. The **Hover-test speed (m/s)** field applies only to that mode; airport cruise speed is set in the planner.
 

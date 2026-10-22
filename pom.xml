@@ -9,7 +9,7 @@
     <version>0.1</version>
 
     <properties>
-        <kotlin.version>1.9.22</kotlin.version>
+        <kotlin.version>2.3.0</kotlin.version>
     </properties>
 
 
@@ -36,12 +36,13 @@
                     </execution>
                 </executions>
                 <configuration>
-                    <jvmTarget>1.8</jvmTarget>
+                    <jvmTarget>25</jvmTarget>
                 </configuration>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.14.1</version>
                 <executions>
                     <execution>
                         <id>compile</id>
@@ -59,8 +60,7 @@
                     </execution>
                 </executions>
                 <configuration>
-                    <source>1.8</source>
-                    <target>1.8</target>
+                    <release>25</release>
                 </configuration>
             </plugin>
         </plugins>

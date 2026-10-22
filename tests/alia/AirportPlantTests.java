@@ -13,6 +13,9 @@ final class AirportPlantTests {
         double dt=.05;Set<Phase> phases=EnumSet.noneOf(Phase.class);
         for(int i=1;i<=40000;i++) {
             double groundSpeed=Math.hypot(vn,ve),ias=groundSpeed*1.943844;
+            // Exercise signed near-hover airspeed throughout liftoff and touchdown.
+            // Keep the forward-flight measurement and plant dynamics unchanged.
+            if(groundSpeed<.5)ias-=.20687556266784668;
             var state=new State(n,e,h,h+origin.agl,pitch,roll,heading,vn,ve,vu,p,q,r,h<=.001,ias);
             Output out;
             try{out=controller.update(state,i*dt);}catch(IllegalStateException ex){throw new AssertionError(String.format(Locale.ROOT,

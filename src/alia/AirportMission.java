@@ -33,8 +33,12 @@ final class AirportMission implements MissionController {
     public Output update(State s,double time) {
         double dt=clamp(time-lastTime,.01,.15);lastTime=time;
         if(phase==Phase.IDLE||phase==Phase.STOPPED||phase==Phase.LANDED)return new Output(0,0,0,0,0,0,phase,waypoint,null);
-        if(!Double.isFinite(s.airspeed)||s.airspeed<0)throw new IllegalStateException("Valid indicated airspeed is required for transition flight");
-        lowAirspeedSeconds=phase==Phase.CRUISE&&s.airspeed<55?lowAirspeedSeconds+dt:0;
+        if(!Double.isFinite(s.airspeed))throw new IllegalStateException("Missing or non-finite indicated airspeed during "+phase);
+        // X-Plane reports signed IAS: slight reverse airflow during rotor flight can
+        // produce negative readings. Preserve the measurement in the trace, but use
+        // zero forward speed for scheduling; never interpret its magnitude as wing lift.
+        double forwardAirspeed=Math.max(0,s.airspeed);
+        lowAirspeedSeconds=phase==Phase.CRUISE&&forwardAirspeed<55?lowAirspeedSeconds+dt:0;
         if(lowAirspeedSeconds>2)throw new IllegalStateException("Cruise airspeed below 55 kt for 2 seconds; pause and take over");
         Phase computed=phase;int computedWaypoint=waypoint;double age=time-phaseStart;
         double budget=phase==Phase.CRUISE?Math.max(300,maxRadius/(plan.cruiseKnots()*.514444)*2+180):
@@ -61,7 +65,7 @@ final class AirportMission implements MissionController {
         if(phase==Phase.DESCEND)targetClimb=distance>2.5||groundSpeed>.9?0:-clamp((s.agl-clearance)*.25,.2,.75);
         double climbError=targetClimb-s.vUp;
         if(!s.ground&&lift>.2)liftIntegral=clamp(liftIntegral+climbError*dt*.045,-.3,.3);
-        double wingFraction=rotor?0:smooth((s.airspeed-40)/30);
+        double wingFraction=rotor?0:smooth((forwardAirspeed-40)/30);
         double desiredLift=clamp((baseHover+climbError*.1+liftIntegral)*(1-wingFraction),0,.95);
         if(phase==Phase.CRUISE)desiredLift=0;
         if(phase==Phase.TRANSITION&&s.height<20)desiredLift=Math.max(desiredLift,baseHover);
@@ -70,12 +74,12 @@ final class AirportMission implements MissionController {
         double angle=Math.toRadians(s.heading),an=clamp((vn-s.vNorth)*.65,-1.8,1.8),ae=clamp((ve-s.vEast)*.65,-1.8,1.8);
         double rotorPitch=-Math.toDegrees(Math.atan2(an*Math.cos(angle)+ae*Math.sin(angle),9.80665));
         double rotorRoll=Math.toDegrees(Math.atan2(ae*Math.cos(angle)-an*Math.sin(angle),9.80665));
-        double wingPitch=clamp(3+Math.toDegrees(Math.atan2(targetClimb,Math.max(15,s.airspeed*.514444))),-8,12);
+        double wingPitch=clamp(3+Math.toDegrees(Math.atan2(targetClimb,Math.max(15,forwardAirspeed*.514444))),-8,12);
         double wingRoll=clamp(headingError*.65-s.r*.2,-22,22);
         if(phase==Phase.APPROACH)wingPitch=Math.max(wingPitch,clamp((groundSpeed-Math.sqrt(2*.65*Math.max(0,toDestination-200)))*.6,0,12));
-        double blend=rotor?0:phase==Phase.APPROACH?smooth((s.airspeed-25)/25):1;
+        double blend=rotor?0:phase==Phase.APPROACH?smooth((forwardAirspeed-25)/25):1;
         double pitchTarget=rotorPitch*(1-blend)+wingPitch*blend,rollTarget=rotorRoll*(1-blend)+wingRoll*blend;
-        double speedError=plan.cruiseKnots()-s.airspeed;
+        double speedError=plan.cruiseKnots()-forwardAirspeed;
         if(phase==Phase.CRUISE)speedIntegral=clamp(speedIntegral+speedError*dt*.001,-.2,.2);
         double desiredPusher=phase==Phase.TRANSITION?.8:phase==Phase.CRUISE?clamp(.55+speedError*.015+speedIntegral,.1,.95):0;
         lift+=clamp(desiredLift-lift,-.25*dt,.25*dt);pusher+=clamp(desiredPusher-pusher,-.6*dt,.15*dt);
@@ -91,7 +95,7 @@ final class AirportMission implements MissionController {
             }
             case TRANSITION -> {
                 gate="Indicated airspeed ≥ 70 kt, height ≥ 35 m, vertical speed > −1 m/s, sustained for 3 s.";
-                dwell=s.airspeed>=70&&s.height>=35&&s.vUp> -1?dwell+dt:0;
+                dwell=forwardAirspeed>=70&&s.height>=35&&s.vUp> -1?dwell+dt:0;
                 if(dwell>3)change(Phase.CRUISE,time);
             }
             case CRUISE -> {
@@ -122,6 +126,7 @@ final class AirportMission implements MissionController {
         terms.put("targetPitch",pitchTarget);terms.put("targetRoll",rollTarget);terms.put("pitchP",.075*(pitchTarget-s.pitch));terms.put("pitchD",-.025*s.q);
         terms.put("rollP",.075*(rollTarget-s.roll));terms.put("rollD",-.025*s.p);terms.put("headingError",headingError);terms.put("yawP",.025*headingError);terms.put("yawD",-.018*s.r);
         terms.put("requestedPusher",desiredPusher);terms.put("appliedPusher",pusher);terms.put("airspeedKnots",s.airspeed);terms.put("targetAirspeedKnots",plan.cruiseKnots());
+        terms.put("forwardAirspeedKnots",forwardAirspeed);
         terms.put("destinationDistance",toDestination);terms.put("brakingDistance",brakingDistance);terms.put("phaseSeconds",age);terms.put("settledSeconds",dwell);
         terms.put("underspeedSeconds",lowAirspeedSeconds);
         String transition=phase!=computed?computed+" → "+phase+": "+gate:waypoint!=computedWaypoint?"Advanced to route leg "+(waypoint+1):"";

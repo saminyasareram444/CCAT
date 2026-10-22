@@ -33,6 +33,7 @@ final class AirportMissionTests {
         var site=new AirportDatabase.Site("Runway 09/27 midpoint",lat,lon,90);
         var airport=new AirportDatabase.Airport("TEST","Destination",lat,lon,origin.elevation-origin.agl,"Airport",List.of(site));
         AirportPlan plan=new AirportPlan(airport,site,300,90);plan.validateStart(origin);
+        signedAirspeed(plan,origin);
         boolean nearRejected=false;
         try{var nearby=new AirportDatabase.Site("Nearby",origin.lat,origin.lon+.001,0);new AirportPlan(airport,nearby,300,90).validateStart(origin);}catch(IllegalArgumentException ex){nearRejected=true;}
         check(nearRejected,"insufficient transition distance is rejected, not silently shortened");
@@ -52,10 +53,10 @@ final class AirportMissionTests {
         time+=.05;out=mission.update(state(destination.north,destination.east-200,50,51.5,heading,0,5,0,false,10),time);
         check(mission.phase()==Phase.HOVER_CAPTURE,"slow approach switches to destination hover capture");
         double arrivalHeight=plan.destinationHeight(origin);
-        for(int i=0;i<45;i++){time+=.05;out=mission.update(state(destination.north,destination.east,arrivalHeight+30,31.5,90,0,0,0,false,0),time);}
+        for(int i=0;i<45;i++){time+=.05;out=mission.update(state(destination.north,destination.east,arrivalHeight+30,31.5,90,0,0,0,false,-.20687556266784668),time);}
         check(mission.phase()==Phase.DESCEND,"capture gate starts vertical destination landing");
         check(out.trace.target.east>500,"landing target remains at destination, not departure home");
-        for(int i=0;i<25;i++){time+=.05;out=mission.update(state(destination.north,destination.east,arrivalHeight,origin.agl,90,0,0,0,true,0),time);}
+        for(int i=0;i<25;i++){time+=.05;out=mission.update(state(destination.north,destination.east,arrivalHeight,origin.agl,90,0,0,0,true,-.20687556266784668),time);}
         check(mission.phase()==Phase.LANDED&&out.lift==0&&out.pusher==0,"ground contact idles both propulsion groups");
         check(mission.radiusLimit()>plan.distance(origin),"airport-specific bounds replace hover-test radius");
         AirportMission timed=new AirportMission(plan,origin,.6);timed.start(0);double clock=0;
@@ -72,6 +73,39 @@ final class AirportMissionTests {
         }
         battery(source);
         System.out.println("PASS: "+checks+" airport / battery checks (scenery parsing, routing, transition gates, destination landing, measured power).");return checks;
+    }
+    private static void signedAirspeed(AirportPlan plan,NativeLink.Position origin) {
+        // Actual paused-flight IAS, AGL, attitude and velocity from 20261022-172427.
+        double measuredIas=-.20687556266784668,heading=plan.course(origin),time=.05;
+        AirportMission signed=new AirportMission(plan,origin,.6),zero=new AirportMission(plan,origin,.6);
+        signed.start(0);zero.start(0);
+        State recorded=new State(.675,.999,1.779,1.791,2.456,-.118,heading,.142,.246,1.291,0,0,0,false,measuredIas);
+        Output negative=signed.update(recorded,time);
+        Output baseline=zero.update(new State(recorded.north,recorded.east,recorded.height,recorded.agl,
+            recorded.pitch,recorded.roll,recorded.heading,recorded.vNorth,recorded.vEast,recorded.vUp,0,0,0,false,0),time);
+        check(negative.phase==Phase.TAKEOFF&&negative.lift>0,"recorded negative-IAS liftoff sample continues vertical takeoff");
+        check(negative.lift==baseline.lift&&negative.pitch==baseline.pitch&&negative.roll==baseline.roll&&negative.yaw==baseline.yaw&&negative.pusher==0,
+            "negative near-hover IAS leaves rotor control identical to zero IAS");
+        check(negative.trace.terms.get("airspeedKnots")==measuredIas&&negative.trace.terms.get("forwardAirspeedKnots")==0,
+            "trace preserves signed measured IAS separately from nonnegative forward control speed");
+        for(int i=0;i<45;i++){time+=.05;signed.update(state(0,0,40,41.5,heading,0,0,0,false,measuredIas),time);}
+        check(signed.phase()==Phase.TRANSITION,"negative hover IAS does not block the stabilized takeoff gate");
+        for(int i=0;i<65;i++){time+=.05;negative=signed.update(state(0,100,50,51.5,heading,0,.3,0,false,measuredIas),time);}
+        check(signed.phase()==Phase.TRANSITION&&negative.trace.terms.get("wingSupportFraction")==0,
+            "negative IAS cannot pass the 70 kt transition gate or remove rotor support");
+        for(int i=0;i<65;i++){time+=.05;signed.update(state(0,100,50,51.5,heading,0,38,0,false,75),time);}
+        check(signed.phase()==Phase.CRUISE,"valid forward IAS is still required to enter cruise");
+        Point destination=signed.route().get(signed.route().size()-1);
+        boolean underspeed=false;
+        try {for(int i=0;i<45;i++){time+=.05;signed.update(state(destination.north/2,destination.east/2,300,301.5,heading,0,20,0,false,measuredIas),time);}}
+        catch(IllegalStateException ex){underspeed=ex.getMessage().contains("55 kt");}
+        check(underspeed,"negative cruise IAS still trips the persistent 55 kt underspeed guard");
+        for(double invalid:new double[]{Double.NaN,Double.POSITIVE_INFINITY,Double.NEGATIVE_INFINITY}) {
+            AirportMission missing=new AirportMission(plan,origin,.6);missing.start(0);boolean rejected=false;
+            try{missing.update(state(0,0,1,2.5,heading,0,0,1,false,invalid),.05);}
+            catch(IllegalStateException ex){rejected=ex.getMessage().contains("indicated airspeed");}
+            check(rejected,"non-finite IAS remains invalid telemetry: "+invalid);
+        }
     }
     private static State state(double n,double e,double h,double agl,double heading,double vn,double ve,double vu,boolean ground,double ias) {
         return new State(n,e,h,agl,0,0,heading,vn,ve,vu,0,0,0,ground,ias);
