@@ -61,7 +61,10 @@ public final class AliaTests {
             check(s.pos.pitch==2&&s.pos.heading==30&&s.pos.roll==3,"RPOS orientation order");
             check(Math.abs(s.pos.q-Math.toDegrees(.2))<0.001,"RPOS radians converted to degrees");
             check(server.writes.isEmpty(),"connection sends no control writes");
+            check(PilotWeather.from(s).complete()&&Math.abs(PilotWeather.from(s).windKnots()-9.71922)<.001,"optional aircraft weather is received through the native UDP subscription");
             checks+=ExplainabilityTests.run(s);
+            checks+=PilotDisplayTests.run();
+            checks+=PilotAttributionTests.run();
             checks+=AirportMissionTests.run(s);
             checks+=AirportPlantTests.run(s.pos);
             String telemetry=TelemetryView.format(s,"MONITORING",0,null,null);
@@ -186,6 +189,11 @@ public final class AliaTests {
                             if(index>=23&&index<28)value=52000;
                             if(index>=28&&index<33)value=800;
                             if(index>=33&&index<38)value=100;
+                            if(index==NativeLink.WEATHER_OFFSET)value=270;
+                            if(index==NativeLink.WEATHER_OFFSET+1)value=5;
+                            if(index==NativeLink.WEATHER_OFFSET+2)value=15;
+                            if(index==NativeLink.WEATHER_OFFSET+3)value=12;
+                            if(index==NativeLink.WEATHER_OFFSET+4)value=.2f;
                             r.putInt(index).putFloat(value);
                         }
                         replies.send(new DatagramPacket(r.array(),r.position(),client));sent=System.nanoTime();

@@ -9,6 +9,7 @@ import java.util.*;
 /** X-Plane's built-in UDP protocol, documented in Instructions/Exchanging Data with X-Plane. */
 public final class NativeLink implements AutoCloseable {
     public static final int CORE_COUNT=22;
+    static final int WEATHER_OFFSET=38;
     private static final String[] CORE_REFS = {
         "sim/time/paused", "sim/flightmodel/failures/onground_any",
         "sim/flightmodel/position/indicated_airspeed", "sim/aircraft/engine/acf_num_engines",
@@ -36,6 +37,10 @@ public final class NativeLink implements AutoCloseable {
         for(String base:new String[]{"sim/cockpit/electrical/battery_charge_watt_hr",
             "sim/cockpit2/electrical/battery_voltage_actual_volts","sim/cockpit2/electrical/battery_amps"})
             for(int i=0;i<5;i++)refs.add(base+"["+i+"]");
+        // Effective weather at the aircraft, not an arbitrary altitude layer.
+        refs.addAll(List.of("sim/weather/aircraft/wind_now_direction_degt",
+            "sim/weather/aircraft/wind_now_speed_msc","sim/weather/aircraft/visibility_reported_sm",
+            "sim/weather/aircraft/temperature_ambient_deg_c","sim/weather/aircraft/precipitation_on_aircraft_ratio"));
         return refs.toArray(String[]::new);
     }
     private final DatagramSocket socket;
@@ -87,7 +92,7 @@ public final class NativeLink implements AutoCloseable {
     public String error() {return error;}
     public void subscribe() throws IOException {
         send(textPacket("RPOS","20"));
-        for(int i=0;i<REFS.length;i++) send(request(i,20,REFS[i]));
+        for(int i=0;i<REFS.length;i++) send(request(i,i>=WEATHER_OFFSET?2:20,REFS[i]));
     }
     static byte[] request(int index,int frequency,String ref) {
         ByteBuffer b=packet("RREF",413); b.putInt(frequency).putInt(index); putString(b,ref,400); return b.array();

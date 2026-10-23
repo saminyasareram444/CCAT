@@ -45,6 +45,9 @@ final class ExplainabilityDashboard extends JPanel {
         this(controls,telemetry,pause,clear,()->{});
     }
     ExplainabilityDashboard(Runnable controls,Runnable telemetry,Runnable pause,Runnable clear,Runnable planner) {
+        this(controls,telemetry,pause,clear,planner,()->{});
+    }
+    ExplainabilityDashboard(Runnable controls,Runnable telemetry,Runnable pause,Runnable clear,Runnable planner,Runnable pilot) {
         setLayout(new BorderLayout(0,10));setBackground(BG);setBorder(new EmptyBorder(0,0,8,0));
         JPanel header=new JPanel(new BorderLayout(15,0));header.setBackground(NAVY);header.setBorder(new EmptyBorder(17,20,17,20));
         JLabel brand=new JLabel("CCAT  /  LIVE EXPLAINABILITY");brand.setForeground(Color.WHITE);brand.setFont(font(23,Font.BOLD));
@@ -54,6 +57,7 @@ final class ExplainabilityDashboard extends JPanel {
         connection.setOpaque(true);connection.setBorder(new EmptyBorder(8,12,8,12));connection.setFont(font(12,Font.BOLD));buttons.add(connection);
         buttons.add(button("Flight controls",controls,false));buttons.add(button("Raw telemetry",telemetry,false));
         buttons.add(button("Mission planner",planner,false));
+        buttons.add(button("Pilot display",pilot,false));
         buttons.add(button("Pause & take over",pause,true));header.add(buttons,BorderLayout.EAST);add(header,BorderLayout.NORTH);
 
         JPanel content=new JPanel(new BorderLayout(0,10));content.setOpaque(false);content.setBorder(new EmptyBorder(0,14,0,14));

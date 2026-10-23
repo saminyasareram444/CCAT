@@ -118,6 +118,26 @@ To select and prepare the aircraft:
 
 The raw telemetry window displays position, MSL altitude, height above terrain, ground/vertical/indicated speed, attitude, heading, actual motor throttles, battery switches, joystick overrides, mission stage, and target distance. Unknown values are shown as `--`; old data is marked **WAITING / STALE**. Its preflight line points out common setup problems. Closing telemetry does not stop the aircraft; **Show telemetry** in the flight window reopens it.
 
+## Pilot tablet display
+
+Launch **`run-pilot.cmd`** for the flight controls and the separate pilot display. From an existing CCAT session, use **Pilot display** in the flight window or engineering dashboard. Run only one CCAT instance; the pilot display shares the same telemetry connection and never starts automatic flight. It is a desktop window styled for a tablet/secondary monitor; it does not install into the X-Plane cockpit or serve a physical tablet over the network.
+
+- **Navigation:** large height AGL in feet, indicated airspeed in knots, measured battery charge, destination distance and an ETA at current ground speed. The north-up route view draws measured position, the selected destination and any alternate preview. It contains no terrain, traffic or obstacle information. Stale values disappear; any retained position is marked **LAST KNOWN POSITION**.
+- **Reroute preview:** opens a touch-friendly search of the installed airport data. Choose an alternative to overlay an amber dashed line, airport code and direct distance. **Preview only: the active mission and aircraft controls remain unchanged.** Clear preview removes the overlay. Alternatives use the paved/25 m/3D filters; the preview is not a terrain-cleared diversion plan.
+- **Sensors:** measured aircraft position, attitude/airspeed and battery switch state. Separate GPS, IMU and LiDAR feeds are explicitly **NOT CONNECTED**. These unavailable optional feeds do not fabricate sensor errors or confidence percentages.
+- **Weather:** effective wind at the aircraft, reported simulator visibility, outside temperature and windshield rain wetness. Wind direction is from true north; wind speed is converted from m/s to knots. These are X-Plane conditions at the aircraft, not destination METARs or forecasts. Fields older than 2 seconds or unavailable show no valid reading; missing optional weather never blocks core telemetry.
+- **Explain:** the current controller action plus a live attribution view. Select **Lift**, **Pitch** (default), **Roll** or **Yaw**. Signed contribution bars show how the executed control terms affect the command; cyan adds to it and amber subtracts. Pitch/roll/yaw show correction, rate damping and output limiting. Lift includes base power, vertical feedback, the rotor-support schedule, limits and the spin-up/down ramp. Small layouts group lift feedback and limit/ramp terms. The graph compares the issued command with a reconstruction over the last **60 seconds of mission time**, updated with CCAT's live display samples (about 5 Hz). Values use **percentage points of the normalized control command**; 1 pp is a command ratio of 0.01.
+
+**Trace closure error** is `100 × |reconstructed command − issued command|`, in percentage points. Reconstruction uses the recorded control terms, limits, previous lift command and step/ramp parameters. The issued output is used only for comparison; it is not used to invent a contribution that forces the error to zero. Near-zero error means the displayed terms account for the controller command. It does **not** measure aircraft prediction error, sensor accuracy, flight safety or calibrated confidence. These are exact rule-term attributions; CCAT's current deterministic controller has no neural model on which to run Integrated Gradients.
+
+Attribution history freezes when the simulation is paused, control is inactive or telemetry is stale. Current contributions/error show unavailable when there is no complete live trace, and a new mission clears the history. The extra controller fields are trace instrumentation; flight control gains and command calculations are unchanged.
+
+An enlarged amber caution or red **TAKE OVER** banner appears above every tab when required. It shows the observed issue and a pilot action. A reported flight fault remains visible even when the simulator has paused. Informational pause/connection states are distinct from flight faults; cautions are not dismissible while their condition persists. **Pause & take over** invokes the same controller pause/release action as the main flight window. **Controls** opens that window. Closing only the pilot display hides it and does not stop the mission.
+
+The status/alert area keeps the same height in every state, so a caution does not shift the rest of the tablet. Its background is cleared on every repaint to prevent old text and alert symbols remaining on screen. Escalation is immediate; clearing or reducing an alert requires **1.5 seconds of stable recovery** to avoid flashing at a threshold.
+
+Use **Full screen** or **F11** to fill the selected monitor; **Esc** exits full screen. Portrait and landscape layouts adapt to the window. Touch actions have large targets. For offline visual inspection, run `run-alia.cmd -PilotPreview`; labelled synthetic screenshots are written under `build/alia/pilot-*-preview.png`, without connecting to X-Plane. The pilot display is experimental simulator software; its alerts reflect CCAT's existing configured limits and measured faults.
+
 ## Live explainability dashboard
 
 Restart CCAT with `run-alia.cmd` to open the dashboard. It shares the existing aircraft connection; it does not open a second telemetry client. If you are running an automatic mission, pause X-Plane before closing the old CCAT window. The dashboard does not start a mission automatically.
@@ -217,6 +237,9 @@ From a terminal in this folder:
 .\run-alia.cmd -Probe      # request live telemetry; no flight-control writes
 .\run-alia.cmd             # open flight controls + live explainability dashboard
 .\run-alia.cmd -Telemetry  # also open raw telemetry on startup
+.\run-pilot.cmd            # flight controls + pilot tablet display
+.\run-alia.cmd -Pilot      # include the pilot display with the engineering dashboard
+.\run-alia.cmd -PilotPreview # labelled offline pilot previews; no X-Plane connection
 .\run-alia.cmd -DashboardPreview # render a labelled offline UI preview; no X-Plane connection
 .\run-alia.cmd -PlannerPreview # render a labelled offline airport-planner preview
 .\run-alia.cmd -AirportIndexCheck # validate installed airport indexing; reads scenery only

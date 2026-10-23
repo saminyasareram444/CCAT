@@ -107,6 +107,7 @@ public final class HoverMission implements MissionController {
         double error=climb-s.vUp;
         if(!s.ground && lift>0.2) integrator=clamp(integrator+error*dt*0.045,-0.3,0.3);
         double desired=clamp(hoverThrottle+error*0.10+integrator,0.05,0.95);
+        double previousLift=lift;
         // Gradually spin up instead of applying hover power instantly.
         lift+=clamp(desired-lift,-0.35*dt,0.20*dt);
         if(phase==Phase.TAKEOFF) {
@@ -132,6 +133,9 @@ public final class HoverMission implements MissionController {
         terms.put("targetNorthSpeed",vn);terms.put("targetEastSpeed",ve);terms.put("targetClimb",climb);
         terms.put("climbError",error);terms.put("baseLift",hoverThrottle);terms.put("verticalP",error*0.10);
         terms.put("verticalI",integrator);terms.put("requestedLift",desired);terms.put("appliedLift",lift);
+        terms.put("previousLift",previousLift);terms.put("stepSeconds",dt);
+        terms.put("liftMinimum",.05);terms.put("liftMaximum",.95);terms.put("liftFloor",0.0);
+        terms.put("liftRiseRate",.20);terms.put("liftFallRate",.35);
         terms.put("targetPitch",pitchTarget);terms.put("targetRoll",rollTarget);
         terms.put("pitchP",0.075*(pitchTarget-s.pitch));terms.put("pitchD",-0.025*s.q);
         terms.put("rollP",0.075*(rollTarget-s.roll));terms.put("rollD",-0.025*s.p);

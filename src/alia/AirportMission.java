@@ -90,6 +90,7 @@ final class AirportMission implements MissionController {
         double speedError=plan.cruiseKnots()-forwardAirspeed;
         if(phase==Phase.CRUISE)speedIntegral=clamp(speedIntegral+speedError*dt*.001,-.2,.2);
         double desiredPusher=phase==Phase.TRANSITION?.8:phase==Phase.CRUISE?clamp(.55+speedError*.015+speedIntegral,.1,.95):0;
+        double previousLift=lift;
         lift+=clamp(desiredLift-lift,-.25*dt,.25*dt);pusher+=clamp(desiredPusher-pusher,-.6*dt,.15*dt);
         double pitch=clamp(.075*(pitchTarget-s.pitch)-.025*s.q,-.5,.5),roll=clamp(.075*(rollTarget-s.roll)-.025*s.p,-.5,.5);
         double yaw=clamp(.025*headingError-.018*s.r,-.4,.4);
@@ -138,6 +139,9 @@ final class AirportMission implements MissionController {
         terms.put("targetNorthSpeed",vn);terms.put("targetEastSpeed",ve);terms.put("targetClimb",targetClimb);terms.put("climbError",climbError);
         terms.put("baseLift",baseHover);terms.put("verticalP",climbError*.1);terms.put("verticalI",liftIntegral);
         terms.put("wingSupportFraction",wingFraction);terms.put("requestedLift",desiredLift);terms.put("appliedLift",lift);
+        terms.put("previousLift",previousLift);terms.put("stepSeconds",dt);
+        terms.put("liftMinimum",0.0);terms.put("liftMaximum",.95);terms.put("liftFloor",computed==Phase.TRANSITION&&s.height<20?baseHover:0.0);
+        terms.put("liftRiseRate",.25);terms.put("liftFallRate",.25);
         terms.put("targetPitch",pitchTarget);terms.put("targetRoll",rollTarget);terms.put("pitchP",.075*(pitchTarget-s.pitch));terms.put("pitchD",-.025*s.q);
         terms.put("rollP",.075*(rollTarget-s.roll));terms.put("rollD",-.025*s.p);terms.put("headingError",headingError);terms.put("yawP",.025*headingError);terms.put("yawD",-.018*s.r);
         terms.put("requestedPusher",desiredPusher);terms.put("appliedPusher",pusher);terms.put("airspeedKnots",s.airspeed);terms.put("targetAirspeedKnots",plan.cruiseKnots());

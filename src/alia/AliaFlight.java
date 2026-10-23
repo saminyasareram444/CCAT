@@ -40,20 +40,23 @@ public final class AliaFlight {
     private final ExplainabilityModel explainability=new ExplainabilityModel();
     private final ExplainabilityDashboard dashboard;
     private final MissionPlannerView planner;
+    private final PilotDisplay pilot;
     private AirportPlan selectedAirportPlan;
     private final JLabel missionMode=new JLabel("Mode: local hover test / return to start");
     private HoverMission.Output lastOutput;
     private long lastDashboardUpdate;
     private double desiredPusher;
 
-    private AliaFlight(boolean openTelemetry,boolean openDashboard) {
+    private AliaFlight(boolean openTelemetry,boolean openDashboard,boolean openPilot) {
         telemetry=new TelemetryView();
         planner=new MissionPlannerView(()->{NativeLink current=link;return current==null?null:current.snapshot();},
             plan->worker.execute(()->useAirportPlan(plan)));
+        pilot=new PilotDisplay(()->worker.execute(()->{try{stop("Paused for manual takeover",true);}catch(IOException ex){fault(ex);}}),
+            ()->{frame.setVisible(true);frame.toFront();},planner::installationRoot);
         dashboard=new ExplainabilityDashboard(()->{frame.setVisible(true);frame.toFront();},
             ()->telemetry.openBeside(frame),
             ()->worker.execute(()->{try{stop("Paused for manual takeover",true);}catch(IOException ex){fault(ex);}}),
-            ()->worker.execute(explainability::clearEvents),()->planner.open());
+            ()->worker.execute(explainability::clearEvents),()->planner.open(),pilot::open);
         status.setEditable(false);status.setFont(new Font(Font.MONOSPACED,Font.PLAIN,13));
         route.setFont(new Font(Font.MONOSPACED,Font.PLAIN,13));
         JPanel settings=new JPanel(new BorderLayout(8,8));
@@ -69,6 +72,7 @@ public final class AliaFlight {
         showTelemetry.addActionListener(e->telemetry.openBeside(frame));
         JButton showDashboard=new JButton("Live dashboard");actions.add(showDashboard);
         showDashboard.addActionListener(e->dashboard.open());
+        JButton showPilot=new JButton("Pilot display");actions.add(showPilot);showPilot.addActionListener(e->pilot.open());
         JButton planMission=new JButton("Mission planner");actions.add(planMission);planMission.addActionListener(e->planner.open());
         JButton hoverMode=new JButton("Use hover test");actions.add(hoverMode);hoverMode.addActionListener(e->worker.execute(()->{
             if(ownsControls){event="Stop the current mission before changing mission mode";return;}
@@ -84,13 +88,14 @@ public final class AliaFlight {
         frame.addWindowListener(new WindowAdapter(){public void windowClosing(WindowEvent e){worker.execute(()->{
             try {stop("Window closed",true);} catch(IOException ex) {System.err.println(ex.getMessage());} finally {
                 if(link!=null)link.close();explainability.close();worker.shutdown();
-                SwingUtilities.invokeLater(()->{planner.close();dashboard.close();telemetry.close();frame.dispose();});
+                SwingUtilities.invokeLater(()->{pilot.close();planner.close();dashboard.close();telemetry.close();frame.dispose();});
             }
         });}});
         frame.pack();frame.setLocationRelativeTo(null);frame.setVisible(true);
         if(openTelemetry)telemetry.openBeside(frame);
         if(openDashboard)dashboard.open();
-        if(openTelemetry||openDashboard) {
+        if(openPilot)pilot.open();
+        if(openTelemetry||openDashboard||openPilot) {
             // Monitoring only: subscribing does not send flight-control writes.
             worker.execute(()->{try{connect();}catch(IOException ex){fault(ex);}});
         }
@@ -259,7 +264,8 @@ public final class AliaFlight {
             lastDashboardUpdate=now;
             ExplainabilityModel.Frame view=explainability.update(s,mission==null?"MONITORING":mission.phase().name(),
                 ownsControls,elapsed,home,mission==null?Collections.emptyList():mission.route(),lastOutput,event,mission);
-            SwingUtilities.invokeLater(()->dashboard.update(view));
+            AirportPlan displayPlan=selectedAirportPlan;
+            SwingUtilities.invokeLater(()->{dashboard.update(view);pilot.update(view,displayPlan);});
         }
     }
     private void fault(Exception ex) {
@@ -313,6 +319,7 @@ public final class AliaFlight {
         }
         boolean openTelemetry=Arrays.asList(args).contains("--telemetry");
         boolean openDashboard=Arrays.asList(args).contains("--dashboard");
-        SwingUtilities.invokeLater(()->new AliaFlight(openTelemetry,openDashboard));
+        boolean openPilot=Arrays.asList(args).contains("--pilot");
+        SwingUtilities.invokeLater(()->new AliaFlight(openTelemetry,openDashboard,openPilot));
     }
 }

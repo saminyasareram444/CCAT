@@ -75,6 +75,7 @@ final class MissionPlannerView extends JPanel {
         window.setVisible(true);window.toFront();refresh.start();if(database==null&&!loading)load();
     }
     void close(){refresh.stop();if(window!=null)window.dispose();}
+    Path installationRoot(){return Paths.get(installation.getText());}
     private void load() {
         if(loading)return;loading=true;Path root=Paths.get(installation.getText());status.setText("Indexing installed scenery airports… first load may take a few seconds.");
         new SwingWorker<AirportDatabase,Void>() {
