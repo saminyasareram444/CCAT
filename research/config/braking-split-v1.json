@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "split_id": "braking-scenario-v1",
+  "method": "frozen chronological route/scenario groups",
+  "groups": {
+    "6882b2350bb2": "train",
+    "ff8ca5c25667": "validation",
+    "5f4e42b20d1e": "test"
+  },
+  "flights": {
+    "train": [
+      "20261022-182752-257.csv",
+      "20261023-103732-617.csv"
+    ],
+    "validation": [
+      "20261023-111455-746.csv"
+    ],
+    "test": [
+      "20261023-113943-894.csv",
+      "20261026-185034-267.csv"
+    ]
+  },
+  "warning": "Only three independent historical scenario groups; pilot experiment, not a generalization claim."
+}

@@ -5,6 +5,8 @@ import static alia.HoverMission.*;
 
 /** Experimental ALIA lift+cruise control. Requires live tuning; no terrain/traffic avoidance. */
 final class AirportMission implements MissionController {
+    // Version this identifier whenever the approach procedure changes; shadow models are conditional on it.
+    static final String BRAKING_POLICY_ID="alia-airport-brake-hold-v1";
     private final AirportPlan plan;
     private final List<Point> route;
     private final Point destination;

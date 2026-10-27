@@ -67,6 +67,9 @@ public final class AliaTests {
             checks+=PilotAttributionTests.run();
             checks+=AirportMissionTests.run(s);
             checks+=AirportPlantTests.run(s.pos);
+            checks+=BrakingShadowTests.run();
+            check(server.writes.isEmpty()&&server.commands.isEmpty(),"shadow observer/tests cannot issue simulator controls");
+            s=link.snapshot(); // Numerical/rendering checks can outlive the original telemetry snapshot's freshness window.
             String telemetry=TelemetryView.format(s,"MONITORING",0,null,null);
             check(telemetry.contains("Connection: LIVE")&&telemetry.contains("ALIA-250 confirmed"),"telemetry connection and aircraft labels");
             check(telemetry.contains("Lift motor 4")&&telemetry.contains("Pusher motor"),"telemetry shows all five motor throttles");

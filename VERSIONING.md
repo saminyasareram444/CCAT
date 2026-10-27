@@ -24,7 +24,7 @@ The bundle preserves baseline history and can be cloned into a new directory wit
 
 Close the active CCAT application, then open the launcher from the desired folder. You do not need to switch branches in the original folder to run the experiment copy.
 
-Do not launch both controllers together against the same simulator. The research configuration begins in shadow / recommendation mode; no new cognitive controller has been implemented yet.
+Do not launch both controllers together against the same simulator. The research checkout now provides an optional braking shadow observer and new-run metadata; it cannot change controls or destinations. The inherited approach-control equations and gates are unchanged. The energy predictor, Soar supervisor and episodic retrieval remain future work. `run-research.cmd monitor` opens the observer with the existing flight-control application. See `research/README.md` for offline commands and qualification limits.
 
 ## GitHub history
 

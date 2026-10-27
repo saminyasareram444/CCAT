@@ -1,4 +1,4 @@
-param([switch]$Test, [switch]$Probe, [switch]$Recover, [switch]$BuildOnly, [switch]$Telemetry, [switch]$Dashboard, [switch]$Pilot, [switch]$PilotPreview, [switch]$DashboardPreview, [switch]$PlannerPreview, [switch]$AirportIndexCheck)
+param([switch]$Test, [switch]$Probe, [switch]$Recover, [switch]$BuildOnly, [switch]$Telemetry, [switch]$Dashboard, [switch]$Pilot, [switch]$PilotPreview, [switch]$DashboardPreview, [switch]$PlannerPreview, [switch]$AirportIndexCheck, [switch]$BrakingShadow)
 $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath $PSScriptRoot
 
@@ -37,6 +37,19 @@ else {
     if ($Telemetry) { $appArgs += '--telemetry' }
     if ($Dashboard) { $appArgs += '--dashboard' }
     if ($Pilot) { $appArgs += '--pilot' }
-    & (Join-Path $jdkBin 'java.exe') -cp $classes alia.AliaFlight $appArgs
+    if ($BrakingShadow) { $appArgs += '--braking-shadow' }
+    $researchCommit = 'UNKNOWN'
+    $researchDirty = 'UNKNOWN'
+    $gitCompiler = Get-Command git.exe -ErrorAction SilentlyContinue
+    $gitPath = if ($gitCompiler) { $gitCompiler.Source } else { $null }
+    if (-not $gitPath) {
+        $desktopGit = Get-ChildItem -Path (Join-Path $env:LOCALAPPDATA 'GitHubDesktop\app-*\resources\app\git\cmd\git.exe') -ErrorAction SilentlyContinue | Sort-Object FullName -Descending | Select-Object -First 1
+        if ($desktopGit) { $gitPath = $desktopGit.FullName }
+    }
+    if ($gitPath) {
+        $researchCommit = (& $gitPath --no-optional-locks rev-parse HEAD 2>$null | Out-String).Trim()
+        $researchDirty = [string][bool]((& $gitPath --no-optional-locks status --porcelain 2>$null | Out-String).Trim())
+    }
+    & (Join-Path $jdkBin 'java.exe') "-Dccat.research.commit=$researchCommit" "-Dccat.research.dirty=$researchDirty" -cp $classes alia.AliaFlight $appArgs
 }
 exit $LASTEXITCODE

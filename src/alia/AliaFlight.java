@@ -46,8 +46,11 @@ public final class AliaFlight {
     private HoverMission.Output lastOutput;
     private long lastDashboardUpdate;
     private double desiredPusher;
+    private BrakingShadow shadow;
+    private String researchRunId="UNASSIGNED";
 
-    private AliaFlight(boolean openTelemetry,boolean openDashboard,boolean openPilot) {
+    private AliaFlight(boolean openTelemetry,boolean openDashboard,boolean openPilot,boolean openShadow) {
+        if(openShadow)shadow=new BrakingShadow(Paths.get("research/local/models/braking.properties"),Paths.get("research/local/shadow"));
         telemetry=new TelemetryView();
         planner=new MissionPlannerView(()->{NativeLink current=link;return current==null?null:current.snapshot();},
             plan->worker.execute(()->useAirportPlan(plan)));
@@ -73,6 +76,10 @@ public final class AliaFlight {
         JButton showDashboard=new JButton("Live dashboard");actions.add(showDashboard);
         showDashboard.addActionListener(e->dashboard.open());
         JButton showPilot=new JButton("Pilot display");actions.add(showPilot);showPilot.addActionListener(e->pilot.open());
+        JButton showShadow=new JButton("Braking shadow");actions.add(showShadow);showShadow.addActionListener(e->worker.execute(()->{
+            if(shadow==null)shadow=new BrakingShadow(Paths.get("research/local/models/braking.properties"),Paths.get("research/local/shadow"));
+            SwingUtilities.invokeLater(shadow::open);
+        }));
         JButton planMission=new JButton("Mission planner");actions.add(planMission);planMission.addActionListener(e->planner.open());
         JButton hoverMode=new JButton("Use hover test");actions.add(hoverMode);hoverMode.addActionListener(e->worker.execute(()->{
             if(ownsControls){event="Stop the current mission before changing mission mode";return;}
@@ -88,6 +95,7 @@ public final class AliaFlight {
         frame.addWindowListener(new WindowAdapter(){public void windowClosing(WindowEvent e){worker.execute(()->{
             try {stop("Window closed",true);} catch(IOException ex) {System.err.println(ex.getMessage());} finally {
                 if(link!=null)link.close();explainability.close();worker.shutdown();
+                if(shadow!=null)shadow.close();
                 SwingUtilities.invokeLater(()->{pilot.close();planner.close();dashboard.close();telemetry.close();frame.dispose();});
             }
         });}});
@@ -95,7 +103,8 @@ public final class AliaFlight {
         if(openTelemetry)telemetry.openBeside(frame);
         if(openDashboard)dashboard.open();
         if(openPilot)pilot.open();
-        if(openTelemetry||openDashboard||openPilot) {
+        if(openShadow)shadow.open();
+        if(openTelemetry||openDashboard||openPilot||openShadow) {
             // Monitoring only: subscribing does not send flight-control writes.
             worker.execute(()->{try{connect();}catch(IOException ex){fault(ex);}});
         }
@@ -172,8 +181,10 @@ public final class AliaFlight {
             next=new AirportMission(selectedAirportPlan,s.pos,Double.parseDouble(pendingHover));
         }else next=new HoverMission(parseRoute(pendingRoute),s.pos.heading,Double.parseDouble(pendingHover),Double.parseDouble(pendingSpeed));
         Path folder=Paths.get("logs","alia");Files.createDirectories(folder);
-        log=new PrintWriter(Files.newBufferedWriter(folder.resolve(
-            LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS"))+".csv")));
+        Path flightLog=folder.resolve(LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss-SSS"))+".csv");
+        log=new PrintWriter(Files.newBufferedWriter(flightLog));
+        researchRunId=flightLog.getFileName().toString().replace(".csv","");
+        try{ResearchRunMetadata.write(flightLog,selectedAirportPlan);}catch(Exception ex){System.err.println("Research metadata unavailable: "+ex.getMessage());}
         log.println("elapsed_s,phase,waypoint,latitude_deg,longitude_deg,north_m,east_m,height_m,agl_m,vnorth_mps,veast_mps,vup_mps,pitch_deg,roll_deg,pitch_control,roll_control,yaw_control,lift_command,lift_actual,pusher_actual,distance_m,airspeed_kt,pusher_command,battery_percent,minimum_pack_percent,battery_power_kw");
         home=s.pos;mission=next;elapsed=0;readbackMismatch=0;desiredLift=0;desiredPusher=0;
         lastOutput=null;
@@ -241,6 +252,18 @@ public final class AliaFlight {
     }
     private void show(NativeLink.Snapshot s,HoverMission.Output out) {
         if(out!=null)lastOutput=out;
+        if(shadow!=null){
+            // The observer receives value-only inputs after the controller step. It cannot modify flight outputs.
+            try {
+                HoverMission.Trace trace=out==null?null:out.trace;
+                BrakingModel.Observation observation=trace==null?null:new BrakingModel.Observation(
+                    Math.hypot(trace.state.vNorth,trace.state.vEast),trace.state.airspeed,trace.state.vUp,trace.state.pitch,
+                    out.lift,out.pusher,trace.terms.getOrDefault("phaseSeconds",Double.NaN));
+                String computed=trace!=null&&out.phase==trace.computedPhase?trace.computedPhase.name():"";
+                shadow.observe(new BrakingShadow.Sample(elapsed,ownsControls,s.fresh(),s.refs[0]!=0,mission instanceof AirportMission,
+                    computed,mission instanceof AirportMission?AirportMission.BRAKING_POLICY_ID:"",observation,researchRunId));
+            }catch(RuntimeException ex){System.err.println("Research observer unavailable: "+ex.getMessage());}
+        }
         StringBuilder b=new StringBuilder();
         b.append("Connection: ").append(s.fresh()?"LIVE":"waiting / stale").append("\n");
         b.append("Aircraft:   ").append(s.alia()?"ALIA-250":"not confirmed").append("\n");
@@ -320,6 +343,7 @@ public final class AliaFlight {
         boolean openTelemetry=Arrays.asList(args).contains("--telemetry");
         boolean openDashboard=Arrays.asList(args).contains("--dashboard");
         boolean openPilot=Arrays.asList(args).contains("--pilot");
-        SwingUtilities.invokeLater(()->new AliaFlight(openTelemetry,openDashboard,openPilot));
+        boolean openShadow=Arrays.asList(args).contains("--braking-shadow");
+        SwingUtilities.invokeLater(()->new AliaFlight(openTelemetry,openDashboard,openPilot,openShadow));
     }
 }

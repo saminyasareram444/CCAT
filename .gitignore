@@ -4,3 +4,4 @@
 
 # Research data, trained models, runtime episodes and generated artifacts stay local.
 /research/local/
+__pycache__/
