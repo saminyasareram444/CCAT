@@ -1,3 +1,6 @@
 /build/
 /logs/
 /missions/
+
+# Research data, trained models, runtime episodes and generated artifacts stay local.
+/research/local/

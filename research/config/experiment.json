@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "experiment": "soar-energy-braking-memory",
+  "baseline_commit": "e49775e583b54355a4915ca2e7dcc09fb8a8186e",
+  "baseline_ref": "baseline/alia-pilot-2026-10-26",
+  "branch": "experiment/soar-energy-braking-memory",
+  "intended_mode": "shadow_recommendation_only",
+  "cognitive_supervisor_integrated": false,
+  "energy_predictor_trained": false,
+  "braking_predictor_trained": false,
+  "episodic_memory_integrated": false,
+  "local_artifact_root": "research/local",
+  "raw_flight_data": "research/local/data/alia",
+  "runtime_memory": "research/local/episodes",
+  "model_artifacts": "research/local/models",
+  "future_random_seed": 42,
+  "split_unit": "whole_flight_or_scenario",
+  "holdout_outcomes_allowed_in_memory": false
+}
