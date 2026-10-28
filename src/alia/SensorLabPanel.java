@@ -16,6 +16,9 @@ final class SensorLabPanel extends JPanel {
     private final EnumMap<SensorResearch.Sensor,JButton> yes=new EnumMap<>(SensorResearch.Sensor.class),no=new EnumMap<>(SensorResearch.Sensor.class);
     private final Scores scores=new Scores();
     private SensorResearch.View current;
+    private final JTabbedPane pages=new JTabbedPane();
+    private final JLabel liveInstruments=new JLabel();
+    private boolean selectedLive;
     SensorLabPanel(SensorResearch research){
         this.research=research;setLayout(new BorderLayout());setBackground(PilotDisplay.BG);
         JPanel content=new Content();content.setLayout(new BoxLayout(content,BoxLayout.Y_AXIS));content.setBackground(PilotDisplay.CARD);content.setBorder(new EmptyBorder(16,16,16,16));
@@ -49,7 +52,10 @@ final class SensorLabPanel extends JPanel {
         style(status,12,PilotDisplay.AMBER,false);status.setAlignmentX(LEFT_ALIGNMENT);status.setBorder(new EmptyBorder(8,0,8,0));content.add(status);
         JButton reset=button("Reset session learning",()->invoke(research::reset));reset.setAlignmentX(LEFT_ALIGNMENT);reset.setMaximumSize(new Dimension(1800,44));content.add(reset);
         addLabel(content,"Bands 8 / 9 / 10 are legacy research bins, not aircraft safety limits.",12,PilotDisplay.MUTED,false);
-        JScrollPane scroll=new JScrollPane(content);scroll.setBorder(null);scroll.getVerticalScrollBar().setUnitIncrement(28);scroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);add(scroll);
+        JScrollPane scroll=new JScrollPane(content);scroll.setBorder(null);scroll.getVerticalScrollBar().setUnitIncrement(28);scroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        liveInstruments.setVerticalAlignment(SwingConstants.TOP);liveInstruments.setFont(new Font("Segoe UI",Font.PLAIN,17));liveInstruments.setForeground(PilotDisplay.INK);liveInstruments.setBorder(new EmptyBorder(18,18,18,18));liveInstruments.setOpaque(true);liveInstruments.setBackground(PilotDisplay.CARD);
+        JScrollPane instrumentScroll=new JScrollPane(liveInstruments);instrumentScroll.getVerticalScrollBar().setUnitIncrement(30);instrumentScroll.setBorder(null);
+        pages.setFont(new Font("Segoe UI",Font.BOLD,16));pages.addTab("Live instruments",instrumentScroll);pages.addTab("Warning lab",scroll);pages.setSelectedIndex(1);add(pages);
         update();
     }
     private static void style(JLabel l,int size,Color color,boolean bold){l.setFont(new Font("Segoe UI",bold?Font.BOLD:Font.PLAIN,size));l.setForeground(color);}
@@ -61,7 +67,15 @@ final class SensorLabPanel extends JPanel {
         values.add(new SensorResearch.Input(s,((Number)errors.get(s).getValue()).doubleValue(),(SensorResearch.Availability)availability.get(s).getSelectedItem()));
     }invoke(()->research.submit(values));}
     private void rate(SensorResearch.Sensor s,boolean appropriate){if(current!=null)current.decisions().stream().filter(d->d.sensor()==s&&d.rateable()).findFirst().ifPresent(d->invoke(()->research.feedback(d.id(),appropriate)));}
-    void nativeState(ExplainabilityModel.Frame frame){boolean live=frame!=null&&frame.telemetry().fresh();nativeState.setText(live?String.format(Locale.ROOT,"<html>Native X-Plane: %.5f°, %.5f°<br>HDG %.0f° · Pitch %+.1f° · Roll %+.1f° · Battery %s kW</html>",frame.telemetry().pos.lat,frame.telemetry().pos.lon,frame.telemetry().pos.heading,frame.telemetry().pos.pitch,frame.telemetry().pos.roll,Double.isFinite(frame.battery().powerKw())?String.format(Locale.ROOT,"%.1f",frame.battery().powerKw()):"unavailable"):"<html>Native aircraft telemetry: unavailable<br>The synthetic lab works offline.</html>");}
+    void nativeState(ExplainabilityModel.Frame frame){
+        boolean live=frame!=null&&frame.telemetry().fresh();var s=frame==null?null:frame.telemetry();
+        nativeState.setText(live?String.format(Locale.ROOT,"<html>Native X-Plane: %.5f°, %.5f°<br>HDG %.0f° · Pitch %+.1f° · Roll %+.1f° · Battery %s kW</html>",s.pos.lat,s.pos.lon,s.pos.heading,s.pos.pitch,s.pos.roll,Double.isFinite(frame.battery().powerKw())?String.format(Locale.ROOT,"%.1f",frame.battery().powerKw()):"unavailable"):"<html>Native aircraft telemetry: unavailable<br>The synthetic lab works offline.</html>");
+        StringBuilder b=new StringBuilder("<html><h3>X-PLANE SIMULATED INSTRUMENTS</h3>Separate instrument channels; shared simulator.<br>Physical independence is not established.<br><br><table cellspacing='0' cellpadding='5'>");
+        for(var key:SimulatorSensors.Key.values()){if(key==SimulatorSensors.Key.P)b.append("<tr><td colspan='2'><br><b>Simulator truth — not raw IMU</b></td></tr>");b.append("<tr><td><b>").append(key.label).append("</b></td><td>").append(SimulatorSensors.formatted(s,key)).append("</td></tr>");}
+        double residual=SimulatorSensors.attitudeDisagreement(s);b.append("</table><br><b>AHRS pair difference: </b>").append(Double.isFinite(residual)?String.format(Locale.ROOT,"%.3f deg",residual):"UNAVAILABLE");
+        b.append("<br><br>GPS values are navigation/status outputs.<br>Independent GPS position: unavailable.<br>Raw inertial sensor: unavailable.<br>LiDAR range: unavailable.<br>Radio altitude is not LiDAR.</html>");liveInstruments.setText(b.toString());
+        if(live&&!selectedLive){selectedLive=true;pages.setSelectedIndex(0);}
+    }
     void update(){
         current=research.view();mode.setText(current.fresh()?(current.training()?"TRAINING / SYNTHETIC":"FROZEN EVALUATION / SYNTHETIC"):"RESEARCH UNAVAILABLE");
         status.setText("<html>"+html(current.status())+"<br>Ratings: "+current.feedbackCount()+" · logs: research/local/sensor-demo</html>");

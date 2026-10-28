@@ -1,6 +1,7 @@
-param([switch]$Live,[switch]$Test,[switch]$Render,[switch]$InstallDependencies)
+param([switch]$Live,[switch]$Test,[switch]$Render,[switch]$RenderLive,[switch]$InstallDependencies,[switch]$HoverTrial,[switch]$Preflight,[string[]]$ReplayFlights)
 $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath $PSScriptRoot
+if (@(@($Live,$Test,$Render,$RenderLive,$HoverTrial,$Preflight,[bool]$ReplayFlights) | Where-Object { $_ }).Count -gt 1) { throw 'Select one mode: Live, Test, Render, RenderLive, Preflight, HoverTrial or ReplayFlights.' }
 $jdkBin = $null
 $compiler = Get-Command javac.exe -ErrorAction SilentlyContinue
 if ($compiler) { $jdkBin = Split-Path -Parent $compiler.Source }
@@ -36,6 +37,10 @@ if ($LASTEXITCODE -ne 0) { throw 'Sensor research compilation failed.' }
 $main = 'alia.SoarSensorDemo'
 $appArgs = @()
 if ($Test) { $main = 'alia.SoarSensorTests' }
+elseif ($RenderLive) { $main = 'alia.LiveSensorPreview' }
+elseif ($Preflight) { $main = 'alia.LiveHoverTrial'; $appArgs += '--preflight' }
+elseif ($HoverTrial) { $main = 'alia.LiveHoverTrial'; $appArgs += '--execute' }
+elseif ($ReplayFlights) { $main = 'alia.SensorReplayExperiment'; $appArgs += $ReplayFlights }
 elseif ($Render) { $appArgs += '--render' }
 elseif ($Live) { $main = 'alia.AliaFlight'; $appArgs += '--pilot','--sensor-lab' }
 $commit='UNKNOWN'

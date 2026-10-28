@@ -1,5 +1,7 @@
 # Synthetic Soar sensor-warning lab
 
+Update 2026-10-28: **Sensors → Live instruments** now shows real subscriptions to X-Plane's simulated AHRS, radio-altimeter and GPS navigation/status instruments. **Warning lab** remains the explicitly synthetic manual-error demonstration below. Separate GPS positions, raw IMU sensor measurements and LiDAR ranges are still unavailable. See [live experiments](LIVE_INSTRUMENTS.md).
+
 This first executable cognitive milestone adapts the warning-preference learning idea from the [AHMIIAS Full Learning Agent with Macros](https://github.com/loonwerks/AHMIIAS/tree/8c39be86211c701bb3cbf003d73387e4d86f3a63/agents/Full%20Learning%20Agent%20with%20Macros), reviewed at commit `8c39be86211c701bb3cbf003d73387e4d86f3a63`. These are new, small Soar productions and a new host; the legacy flight operators and Java actuator bridge are never loaded. No Tcl macros are needed in this version.
 
 ## Launch

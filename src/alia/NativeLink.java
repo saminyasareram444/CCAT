@@ -41,6 +41,7 @@ public final class NativeLink implements AutoCloseable {
         refs.addAll(List.of("sim/weather/aircraft/wind_now_direction_degt",
             "sim/weather/aircraft/wind_now_speed_msc","sim/weather/aircraft/visibility_reported_sm",
             "sim/weather/aircraft/temperature_ambient_deg_c","sim/weather/aircraft/precipitation_on_aircraft_ratio"));
+        for(var key:SimulatorSensors.Key.values())refs.add(key.ref);
         return refs.toArray(String[]::new);
     }
     private final DatagramSocket socket;
@@ -92,7 +93,7 @@ public final class NativeLink implements AutoCloseable {
     public String error() {return error;}
     public void subscribe() throws IOException {
         send(textPacket("RPOS","20"));
-        for(int i=0;i<REFS.length;i++) send(request(i,i>=WEATHER_OFFSET?2:20,REFS[i]));
+        for(int i=0;i<REFS.length;i++) send(request(i,i>=WEATHER_OFFSET&&i<SimulatorSensors.OFFSET?2:20,REFS[i]));
     }
     static byte[] request(int index,int frequency,String ref) {
         ByteBuffer b=packet("RREF",413); b.putInt(frequency).putInt(index); putString(b,ref,400); return b.array();

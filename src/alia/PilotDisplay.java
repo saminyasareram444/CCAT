@@ -283,10 +283,12 @@ final class PilotDisplay extends JPanel {
             sensorRow(g,w,yy,row,"Attitude / airspeed",live?"LIVE":"NO DATA",live?String.format(Locale.ROOT,"HDG %.0f°T  ·  Pitch %+.1f°  ·  Roll %+.1f°",data.telemetry().pos.heading,data.telemetry().pos.pitch,data.telemetry().pos.roll):"—",live?GREEN:AMBER);yy+=row;
             int on=0;if(live)for(int i=13;i<=17;i++)if(data.telemetry().refs[i]==1)on++;
             sensorRow(g,w,yy,row,"Battery power",live?on+" / 5 ON":"NO DATA","Lowest pack "+number(weakest,"%.0f")+"%",live&&on==5?GREEN:AMBER);yy+=row;
-            if(compact){sensorRow(g,w,yy,row,"Independent sensors","NOT CONNECTED","GPS / IMU / LiDAR feeds unavailable",MUTED);return;}
-            sensorRow(g,w,yy,row,"Independent GPS","NOT CONNECTED","No separate GPS receiver feed",MUTED);yy+=row;
-            sensorRow(g,w,yy,row,"Independent IMU","NOT CONNECTED","No separate inertial sensor feed",MUTED);yy+=row;
-            sensorRow(g,w,yy,row,"LiDAR","NOT CONNECTED","No range / obstacle sensor feed",MUTED);
+            var sensors=data==null?null:data.telemetry();double delta=SimulatorSensors.attitudeDisagreement(sensors);
+            String radio=SimulatorSensors.formatted(sensors,SimulatorSensors.Key.RADIO_ALT_1);
+            if(compact){sensorRow(g,w,yy,row,"Simulated instruments",Double.isFinite(delta)?"LIVE":"UNAVAILABLE","AHRS Δ "+number(delta,"%.2f")+"° · Radio "+radio+" · No LiDAR / GPS position",Double.isFinite(delta)?CYAN:MUTED);return;}
+            sensorRow(g,w,yy,row,"Simulated AHRS",Double.isFinite(delta)?"LIVE":"UNAVAILABLE","Pair pitch/roll difference "+number(delta,"%.3f")+"°; shared simulator source",CYAN);yy+=row;
+            sensorRow(g,w,yy,row,"Radio altimeter","SIMULATED",radio+" · radio altitude is not LiDAR",CYAN);yy+=row;
+            sensorRow(g,w,yy,row,"GPS navigation","STATUS ONLY","Fault codes "+number(SimulatorSensors.value(sensors,SimulatorSensors.Key.GPS_FAILURE_1),"%.0f")+" / "+number(SimulatorSensors.value(sensors,SimulatorSensors.Key.GPS_FAILURE_2),"%.0f")+" · Independent GPS position unavailable",MUTED);
         }
         private void sensorRow(Graphics2D g,int w,int y,int h,String title,String status,String detail,Color color){
             int titleY=h<48?20:23,detailY=h<48?36:45;

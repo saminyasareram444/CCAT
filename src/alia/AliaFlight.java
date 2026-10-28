@@ -58,7 +58,7 @@ public final class AliaFlight {
         pilot=new PilotDisplay(()->worker.execute(()->{try{stop("Paused for manual takeover",true);}catch(IOException ex){fault(ex);}}),
             ()->{frame.setVisible(true);frame.toFront();},planner::installationRoot);
         if(openSensorLab){
-            try{sensorResearch=(SensorResearch)Class.forName("alia.SoarSensorResearch").getConstructor().newInstance();pilot.sensorResearch(sensorResearch);}
+            try{sensorResearch=(SensorResearch)Class.forName("alia.SoarSensorResearch").getConstructor().newInstance();pilot.sensorResearch(sensorResearch);pilot.showPage("Sensors");}
             catch(ReflectiveOperationException ex){JOptionPane.showMessageDialog(frame,"Use run-soar-demo.cmd -Live to load the research runtime. "+ex.getMessage());}
         }
         dashboard=new ExplainabilityDashboard(()->{frame.setVisible(true);frame.toFront();},
