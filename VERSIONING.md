@@ -24,7 +24,7 @@ The bundle preserves baseline history and can be cloned into a new directory wit
 
 Close the active CCAT application, then open the launcher from the desired folder. You do not need to switch branches in the original folder to run the experiment copy.
 
-Do not launch both controllers together against the same simulator. The research checkout now provides an optional braking shadow observer and new-run metadata; it cannot change controls or destinations. The inherited approach-control equations and gates are unchanged. The energy predictor, Soar supervisor and episodic retrieval remain future work. `run-research.cmd monitor` opens the observer with the existing flight-control application. See `research/README.md` for offline commands and qualification limits.
+Do not launch both controllers together against the same simulator. The research checkout provides an optional braking shadow observer, new-run metadata, and a synthetic Soar warning-learning lab. Neither research component can change controls or destinations. The inherited approach-control equations and gates are unchanged. The energy predictor, mission-level Soar supervisor and episodic retrieval remain future work. `run-research.cmd monitor` opens the braking observer. `run-soar-demo.cmd` opens the offline tablet lab; `run-soar-demo.cmd -Live` opens it with native aircraft telemetry and the existing flight application. See `research/README.md` for commands and qualification limits.
 
 ## GitHub history
 

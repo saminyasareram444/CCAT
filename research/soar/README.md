@@ -1,6 +1,6 @@
 # Soar supervisor contract
 
-Status: design only. The original repository contains legacy Soar/JSoar integration and bundled libraries; the native ALIA mode does not currently run a Soar agent. Do not treat those legacy entry points as the new research supervisor.
+Status: the **mission supervisor** below remains design only. A separate, runnable [synthetic sensor-warning demonstration](SENSOR_DEMO.md) now uses real JSoar 4.1.0 RL with pilot ratings in the tablet Sensors tab. It has no mission, predictor, destination or flight-control interface. The native ALIA mode runs it only through the explicit research launcher. Do not treat the original legacy agents as the new research supervisor.
 
 ## Proposed working memory
 
@@ -20,6 +20,6 @@ Initially every output is a structured recommendation record: operator, evidence
 
 Soar uses production knowledge. Re-encoding existing rules is not a data-driven policy by itself. Begin with explicit task knowledge and learned numerical predictions; add episodic retrieval, then optionally reinforcement learning of operator preferences after defining outcomes/rewards and evaluation splits.
 
-Choose and pin a Soar/JSoar runtime when implementing this adapter. The old Maven dependencies and bundled JARs are not proof that this new supervisor is installed, compatible or active.
+The warning demo pins JSoar 4.1.0 and support-library SHA-256 checksums in `../config/soar-runtime-lock.json`. The mission supervisor still needs its own implementation and validation. Its future inputs must preserve source, timestamp, unit, and validity boundaries.
 
 References: [Soar architecture](https://soar.eecs.umich.edu/soar_manual/02_TheSoarArchitecture/), [reinforcement learning tutorial](https://soar.eecs.umich.edu/tutorials/soar_tutorial/06/), [episodic memory tutorial](https://soar.eecs.umich.edu/tutorials/soar_tutorial/08/).

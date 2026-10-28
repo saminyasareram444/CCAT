@@ -1,0 +1,55 @@
+# CCAT research sensor-warning demonstration, v1 (JSoar 4.1.0).
+# Reimplements the warning-preference idea reviewed in AHMIIAS, not its flight script.
+# One isolated agent per sensor. Inputs are dimensionless SYNTHETIC error proxies.
+# Host creates the 4 numeric RL preferences (low/high x warn/quiet).
+# NORMAL / SAFETY / UNAVAILABLE are mandatory and cannot be learned away.
+
+sp {classify*normal
+ (state <s> ^superstate nil ^io.input-link <i>)
+ (<i> ^available yes ^error { >= 0 < 8 })
+ --> (<s> ^band normal)}
+sp {classify*low
+ (state <s> ^superstate nil ^io.input-link <i>)
+ (<i> ^available yes ^error { >= 8 < 9 })
+ --> (<s> ^band low)}
+sp {classify*high
+ (state <s> ^superstate nil ^io.input-link <i>)
+ (<i> ^available yes ^error { >= 9 < 10 })
+ --> (<s> ^band high)}
+sp {classify*safety
+ (state <s> ^superstate nil ^io.input-link <i>)
+ (<i> ^available yes ^error >= 10)
+ --> (<s> ^band safety)}
+sp {classify*unavailable
+ (state <s> ^superstate nil ^io.input-link <i>)
+ (<i> ^available no)
+ --> (<s> ^band unavailable)}
+
+sp {propose*normal
+ (state <s> ^band normal -^result)
+ --> (<s> ^operator <o> +) (<o> ^name quiet)}
+sp {propose*safety
+ (state <s> ^band safety -^result)
+ --> (<s> ^operator <o> +) (<o> ^name mandatory-warning)}
+sp {propose*unavailable
+ (state <s> ^band unavailable -^result)
+ --> (<s> ^operator <o> +) (<o> ^name unavailable)}
+sp {propose*learnable
+ (state <s> ^band << low high >> -^result)
+ --> (<s> ^operator <w> + ^operator <q> +)
+ (<w> ^name warn) (<q> ^name quiet)}
+sp {apply*decision
+ (state <s> ^operator <o> ^io.output-link <out> -^result)
+ (<o> ^name <action>)
+ --> (<s> ^result <action>) (<out> ^decision <action>)}
+
+# Host runs no decision cycles while waiting for the pilot. A correlated reply
+# switches input to terminal. Reward is i-supported and exists for this one
+# terminal transition only; halt prevents repeated reward collection.
+sp {feedback*reward
+ (state <s> ^superstate nil ^io.input-link <i> ^reward-link <r>)
+ (<i> ^stage terminal ^reward <value>)
+ --> (<r> ^reward <v>) (<v> ^value <value>)}
+sp {feedback*finish
+ (state <s> ^superstate nil ^io.input-link.stage terminal)
+ --> (halt)}

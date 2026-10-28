@@ -24,6 +24,8 @@ final class PilotDisplay extends JPanel {
     private final Screen screen=new Screen();
     private final List<JButton> tabs=new ArrayList<>();
     private ExplainabilityModel.Frame data;
+    private SensorLabPanel sensorLab;
+    private boolean offlineResearch;
     private AirportPlan destination,alternate;
     private AirportDatabase database;
     private Path databaseRoot;
@@ -64,12 +66,16 @@ final class PilotDisplay extends JPanel {
     }
     void close(){freshness.stop();if(window!=null)window.dispose();}
     void update(ExplainabilityModel.Frame data,AirportPlan destination){this.data=data;this.destination=destination;attribution.update(data);refresh();}
+    void sensorResearch(SensorResearch research){sensorLab=new SensorLabPanel(research);screen.add(sensorLab);screen.revalidate();refresh();}
+    void offlineResearch(){offlineResearch=true;refresh();}
     void showPage(String name){page=name;for(JButton b:tabs){boolean selected=b.getText().equals(name);b.setBackground(selected?new Color(25,66,84):CARD);b.setForeground(selected?CYAN:MUTED);}screen.revalidate();screen.repaint();}
     void showAttributionChannel(ControlAttribution.Channel channel){attributionChannel=channel;screen.styleChannels();screen.repaint();}
     private void refresh(){
-        var alert=PilotDisplayModel.alert(data);banner.update(alert,System.nanoTime());
+        var alert=offlineResearch?new PilotDisplayModel.Alert(PilotDisplayModel.Tone.INFO,"OFFLINE SENSOR LAB","Synthetic warning learning demonstration.","No aircraft connection. No flight controls are sent."):PilotDisplayModel.alert(data);banner.update(alert,System.nanoTime());
         boolean live=data!=null&&data.telemetry().fresh();connection.setText(preview?"DEMO / OFFLINE":live?"● LIVE":"● NO DATA");connection.setForeground(preview?AMBER:live?GREEN:AMBER);
         stage.setText(data==null?"WAITING FOR AIRCRAFT":data.phase().replace('_',' '));screen.repaint();
+        if(offlineResearch){connection.setText("SENSOR DEMO");stage.setText("OFFLINE RESEARCH");}
+        if(sensorLab!=null){sensorLab.nativeState(data);sensorLab.update();}
     }
     private void toggleFullScreen(){
         if(window==null)return;
@@ -153,6 +159,7 @@ final class PilotDisplay extends JPanel {
         }
         private void styleChannels(){for(Component c:channels.getComponents()){JButton b=(JButton)c;boolean selected=b.getText().equals(attributionChannel.label);b.setBackground(selected?new Color(25,66,84):CARD);b.setForeground(selected?CYAN:MUTED);}}
         public void doLayout(){
+            if(sensorLab!=null){sensorLab.setVisible(page.equals("Sensors"));sensorLab.setBounds(0,100,getWidth(),Math.max(0,getHeight()-100));}
             channels.setVisible(page.equals("Explain"));
             if(channels.isVisible()){Rectangle r=explainLayout(getWidth(),getHeight()-100).controls();channels.setBounds(r.x,r.y+100,r.width,r.height);}
         }
@@ -164,7 +171,7 @@ final class PilotDisplay extends JPanel {
             metric(g,tw+gap,8,tw,80,"AIRSPEED",number(ias,"%.0f")+" kt",INK);
             metric(g,2*(tw+gap),8,w-2*(tw+gap),80,"BATTERY",number(battery,"%.0f")+"%",Double.isFinite(battery)&&data.battery().minimumPercent()<20?AMBER:GREEN);
             Graphics2D body=(Graphics2D)g.create();body.translate(0,100);int bh=h-100;
-            switch(page){case "Sensors"->sensors(body,w,bh);case "Weather"->weather(body,w,bh);case "Explain"->liveExplanation(body,w,bh);default->navigation(body,w,bh);}
+            switch(page){case "Sensors"->{if(sensorLab==null)sensors(body,w,bh);}case "Weather"->weather(body,w,bh);case "Explain"->liveExplanation(body,w,bh);default->navigation(body,w,bh);}
             body.dispose();g.dispose();
         }
         private void metric(Graphics2D g,int x,int y,int w,int h,String title,String value,Color color){card(g,x,y,w,h);text(g,title,x+14,y+23,12,MUTED,true);text(g,value,x+14,y+61,w<180?27:32,color,true);}

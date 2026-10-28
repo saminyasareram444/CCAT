@@ -65,7 +65,8 @@ public final class AliaTests {
             checks+=ExplainabilityTests.run(s);
             checks+=PilotDisplayTests.run();
             checks+=PilotAttributionTests.run();
-            checks+=AirportMissionTests.run(s);
+            // Rendering can exceed the one-second freshness window; use the fixture's latest packet.
+            checks+=AirportMissionTests.run(link.snapshot());
             checks+=AirportPlantTests.run(s.pos);
             checks+=BrakingShadowTests.run();
             check(server.writes.isEmpty()&&server.commands.isEmpty(),"shadow observer/tests cannot issue simulator controls");

@@ -47,15 +47,20 @@ public final class AliaFlight {
     private long lastDashboardUpdate;
     private double desiredPusher;
     private BrakingShadow shadow;
+    private SensorResearch sensorResearch;
     private String researchRunId="UNASSIGNED";
 
-    private AliaFlight(boolean openTelemetry,boolean openDashboard,boolean openPilot,boolean openShadow) {
+    private AliaFlight(boolean openTelemetry,boolean openDashboard,boolean openPilot,boolean openShadow,boolean openSensorLab) {
         if(openShadow)shadow=new BrakingShadow(Paths.get("research/local/models/braking.properties"),Paths.get("research/local/shadow"));
         telemetry=new TelemetryView();
         planner=new MissionPlannerView(()->{NativeLink current=link;return current==null?null:current.snapshot();},
             plan->worker.execute(()->useAirportPlan(plan)));
         pilot=new PilotDisplay(()->worker.execute(()->{try{stop("Paused for manual takeover",true);}catch(IOException ex){fault(ex);}}),
             ()->{frame.setVisible(true);frame.toFront();},planner::installationRoot);
+        if(openSensorLab){
+            try{sensorResearch=(SensorResearch)Class.forName("alia.SoarSensorResearch").getConstructor().newInstance();pilot.sensorResearch(sensorResearch);}
+            catch(ReflectiveOperationException ex){JOptionPane.showMessageDialog(frame,"Use run-soar-demo.cmd -Live to load the research runtime. "+ex.getMessage());}
+        }
         dashboard=new ExplainabilityDashboard(()->{frame.setVisible(true);frame.toFront();},
             ()->telemetry.openBeside(frame),
             ()->worker.execute(()->{try{stop("Paused for manual takeover",true);}catch(IOException ex){fault(ex);}}),
@@ -96,6 +101,7 @@ public final class AliaFlight {
             try {stop("Window closed",true);} catch(IOException ex) {System.err.println(ex.getMessage());} finally {
                 if(link!=null)link.close();explainability.close();worker.shutdown();
                 if(shadow!=null)shadow.close();
+                if(sensorResearch!=null)sensorResearch.close();
                 SwingUtilities.invokeLater(()->{pilot.close();planner.close();dashboard.close();telemetry.close();frame.dispose();});
             }
         });}});
@@ -344,6 +350,7 @@ public final class AliaFlight {
         boolean openDashboard=Arrays.asList(args).contains("--dashboard");
         boolean openPilot=Arrays.asList(args).contains("--pilot");
         boolean openShadow=Arrays.asList(args).contains("--braking-shadow");
-        SwingUtilities.invokeLater(()->new AliaFlight(openTelemetry,openDashboard,openPilot,openShadow));
+        boolean openSensorLab=Arrays.asList(args).contains("--sensor-lab");
+        SwingUtilities.invokeLater(()->new AliaFlight(openTelemetry,openDashboard,openPilot,openShadow,openSensorLab));
     }
 }

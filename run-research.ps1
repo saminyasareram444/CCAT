@@ -1,6 +1,14 @@
-param([Parameter(Position=0)][ValidateSet('all','audit','train','replay','collect','test','monitor')][string]$Action='all')
+param([Parameter(Position=0)][ValidateSet('all','audit','train','replay','collect','test','monitor','sensor-demo','sensor-live','sensor-test')][string]$Action='all')
 $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath $PSScriptRoot
+
+if ($Action -like 'sensor-*') {
+    $sensorArgs = @()
+    if ($Action -eq 'sensor-live') { $sensorArgs += '-Live' }
+    if ($Action -eq 'sensor-test') { $sensorArgs += '-Test' }
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'run-soar-demo.ps1') @sensorArgs
+    exit $LASTEXITCODE
+}
 
 if ($Action -eq 'monitor') {
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'run-alia.ps1') -Pilot -BrakingShadow
