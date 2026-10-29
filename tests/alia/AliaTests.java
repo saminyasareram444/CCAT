@@ -64,6 +64,7 @@ public final class AliaTests {
             check(PilotWeather.from(s).complete()&&Math.abs(PilotWeather.from(s).windKnots()-9.71922)<.001,"optional aircraft weather is received through the native UDP subscription");
             checks+=ExplainabilityTests.run(s);
             checks+=SimulatorSensorsTests.run(link.snapshot());
+            checks+=MapTests.run();
             checks+=PilotDisplayTests.run();
             checks+=PilotAttributionTests.run();
             // Rendering can exceed the one-second freshness window; use the fixture's latest packet.

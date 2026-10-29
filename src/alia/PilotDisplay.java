@@ -14,13 +14,14 @@ import javax.imageio.ImageIO;
 
 /** Separate touch-oriented pilot display. Alternate routes are previews and never control the aircraft. */
 final class PilotDisplay extends JPanel {
-    static final Color BG=new Color(9,18,30),CARD=new Color(17,32,49),LINE=new Color(39,59,78),INK=new Color(240,246,251),MUTED=new Color(153,174,193),CYAN=new Color(79,219,235),GREEN=new Color(91,224,171),AMBER=new Color(255,192,73),RED=new Color(255,105,112);
+    static final Color BG=PilotTheme.BASE,CARD=PilotTheme.SURFACE,LINE=PilotTheme.LINE,INK=PilotTheme.TEXT,MUTED=PilotTheme.MUTED,CYAN=new Color(79,219,235),GREEN=new Color(91,224,171),AMBER=new Color(255,192,73),RED=new Color(255,105,112);
     private final Runnable pause,controls;
     private final Supplier<Path> sceneryRoot;
     private final JLabel connection=new JLabel("CONNECTING"),stage=new JLabel("PILOT DISPLAY");
     private final Banner banner=new Banner();
     private final ControlAttribution attribution=new ControlAttribution();
     private ControlAttribution.Channel attributionChannel=ControlAttribution.Channel.PITCH;
+    private final FlightPathMap navigationMap=new FlightPathMap(true);
     private final Screen screen=new Screen();
     private final List<JButton> tabs=new ArrayList<>();
     private ExplainabilityModel.Frame data;
@@ -50,9 +51,9 @@ final class PilotDisplay extends JPanel {
         JPanel navigation=panel(new GridLayout(1,4,8,0));
         for(String title:new String[]{"Navigation","Sensors","Weather","Explain"}){JButton b=button(title,()->showPage(title),CARD,MUTED);b.setPreferredSize(new Dimension(120,54));navigation.add(b);tabs.add(b);}
         bottom.add(navigation,BorderLayout.NORTH);
-        JPanel actions=panel(new GridLayout(1,2,10,0));JButton reroute=button("Reroute preview",this::chooseAlternate,new Color(30,70,101),INK);reroute.setPreferredSize(new Dimension(240,58));
+        JPanel actions=panel(new GridLayout(1,2,10,0));JButton reroute=button("Reroute preview",this::chooseAlternate,PilotTheme.SELECTED,INK);reroute.setPreferredSize(new Dimension(240,58));
         actions.add(reroute);actions.add(button("Pause & take over",pause,new Color(106,35,47),INK));bottom.add(actions,BorderLayout.CENTER);add(bottom,BorderLayout.SOUTH);
-        setPreferredSize(new Dimension(700,1000));showPage("Navigation");
+        setPreferredSize(new Dimension(700,1000));showPage("Navigation");PilotTheme.apply(this);
     }
     void open(){
         if(window==null){
@@ -68,7 +69,8 @@ final class PilotDisplay extends JPanel {
     void update(ExplainabilityModel.Frame data,AirportPlan destination){this.data=data;this.destination=destination;attribution.update(data);refresh();}
     void sensorResearch(SensorResearch research){sensorLab=new SensorLabPanel(research);screen.add(sensorLab);screen.revalidate();refresh();}
     void offlineResearch(){offlineResearch=true;refresh();}
-    void showPage(String name){page=name;for(JButton b:tabs){boolean selected=b.getText().equals(name);b.setBackground(selected?new Color(25,66,84):CARD);b.setForeground(selected?CYAN:MUTED);}screen.revalidate();screen.repaint();}
+    void mapPreview(){preview=true;refresh();}
+    void showPage(String name){page=name;for(JButton b:tabs){boolean selected=b.getText().equals(name);b.setBackground(selected?PilotTheme.SELECTED:CARD);b.setForeground(selected?CYAN:MUTED);}screen.revalidate();screen.repaint();}
     void showAttributionChannel(ControlAttribution.Channel channel){attributionChannel=channel;screen.styleChannels();screen.repaint();}
     private void refresh(){
         var alert=offlineResearch?new PilotDisplayModel.Alert(PilotDisplayModel.Tone.INFO,"OFFLINE SENSOR LAB","Synthetic warning learning demonstration.","No aircraft connection. No flight controls are sent."):PilotDisplayModel.alert(data);banner.update(alert,System.nanoTime());
@@ -76,6 +78,7 @@ final class PilotDisplay extends JPanel {
         stage.setText(data==null?"WAITING FOR AIRCRAFT":data.phase().replace('_',' '));screen.repaint();
         if(offlineResearch){connection.setText("SENSOR DEMO");stage.setText("OFFLINE RESEARCH");}
         if(sensorLab!=null){sensorLab.nativeState(data);sensorLab.update();}
+        navigationMap.update(data,destination,alternate);
     }
     private void toggleFullScreen(){
         if(window==null)return;
@@ -88,7 +91,7 @@ final class PilotDisplay extends JPanel {
     private static Font font(int size,int weight){return new Font("Segoe UI",weight,size);}
     private static JLabel label(String s,int size,int weight,Color color){JLabel l=new JLabel(s);l.setFont(font(size,weight));l.setForeground(color);return l;}
     private static JButton button(String text,Runnable action,Color bg,Color fg){
-        JButton b=new JButton(text);b.setBackground(bg);b.setForeground(fg);b.setFont(font(17,Font.BOLD));b.setFocusPainted(false);b.setOpaque(true);b.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(LINE),new EmptyBorder(9,10,9,10)));b.addActionListener(e->action.run());return b;
+        JButton b=new JButton(text);b.setBackground(bg);b.setForeground(fg);b.setFont(font(17,Font.BOLD));PilotTheme.button(b);b.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(LINE),new EmptyBorder(9,10,9,10)));b.addActionListener(e->action.run());return b;
     }
     private static void text(Graphics2D g,String text,int x,int y,int size,Color color,boolean bold){g.setFont(font(size,bold?Font.BOLD:Font.PLAIN));g.setColor(color);g.drawString(text,x,y);}
     private static int wrap(Graphics2D g,String value,int x,int y,int width,int size,Color color,int maxLines){
@@ -140,7 +143,7 @@ final class PilotDisplay extends JPanel {
                 text(g,"CCAT STATUS",37,33,12,GREEN,true);text(g,alert.detail(),19,67,22,INK,true);
                 text(g,"No current CCAT caution.",19,97,14,MUTED,false);g.dispose();return;
             }
-            g.setColor(warning?new Color(65,26,38):caution?new Color(63,46,21):new Color(20,44,63));g.fillRoundRect(0,0,getWidth(),getHeight()-4,16,16);
+            g.setColor(warning?new Color(65,26,38):caution?new Color(63,46,21):CARD);g.fillRoundRect(0,0,getWidth(),getHeight()-4,16,16);
             g.setColor(accent);g.setStroke(new BasicStroke(2));g.drawRoundRect(1,1,getWidth()-3,getHeight()-6,16,16);
             Polygon triangle=new Polygon(new int[]{34,9,59},new int[]{23,71,71},3);g.fillPolygon(triangle);text(g,"!",28,63,32,BG,true);
             text(g,alert.title(),78,32,24,accent,true);
@@ -152,13 +155,16 @@ final class PilotDisplay extends JPanel {
         private final JPanel channels=panel(new GridLayout(1,4,6,0));
         Screen(){
             setLayout(null);setOpaque(true);setBackground(BG);
+            add(navigationMap);
             for(var channel:ControlAttribution.Channel.values()){
                 JButton b=button(channel.label,()->showAttributionChannel(channel),CARD,MUTED);b.setName("attribution-"+channel.name());b.setFont(font(15,Font.BOLD));channels.add(b);
             }
             channels.setName("attribution-channels");add(channels);styleChannels();
         }
-        private void styleChannels(){for(Component c:channels.getComponents()){JButton b=(JButton)c;boolean selected=b.getText().equals(attributionChannel.label);b.setBackground(selected?new Color(25,66,84):CARD);b.setForeground(selected?CYAN:MUTED);}}
+        private void styleChannels(){for(Component c:channels.getComponents()){JButton b=(JButton)c;boolean selected=b.getText().equals(attributionChannel.label);b.setBackground(selected?PilotTheme.SELECTED:CARD);b.setForeground(selected?CYAN:MUTED);}}
         public void doLayout(){
+            navigationMap.setVisible(page.equals("Navigation"));
+            if(navigationMap.isVisible()){int w=getWidth(),h=getHeight()-100,mapW=w>850?(int)(w*.62):w,mapH=mapHeight(w,h);navigationMap.setBounds(1,168,mapW-2,Math.max(50,mapH-92));}
             if(sensorLab!=null){sensorLab.setVisible(page.equals("Sensors"));sensorLab.setBounds(0,100,getWidth(),Math.max(0,getHeight()-100));}
             channels.setVisible(page.equals("Explain"));
             if(channels.isVisible()){Rectangle r=explainLayout(getWidth(),getHeight()-100).controls();channels.setBounds(r.x,r.y+100,r.width,r.height);}
@@ -177,38 +183,20 @@ final class PilotDisplay extends JPanel {
         private void metric(Graphics2D g,int x,int y,int w,int h,String title,String value,Color color){card(g,x,y,w,h);text(g,title,x+14,y+23,12,MUTED,true);text(g,value,x+14,y+61,w<180?27:32,color,true);}
         private void navigation(Graphics2D g,int w,int h){
             boolean landscape=w>850;
-            int mapW=landscape?(int)(w*.62):w,mapH=landscape?h:Math.max(160,(int)(h*.60));
+            int mapW=landscape?(int)(w*.62):w,mapH=mapHeight(w,h);
             navigationMap(g,0,0,mapW,mapH);
-            if(landscape)explanation(g,mapW+12,0,w-mapW-12,h,false);else explanation(g,0,mapH+10,w,h-mapH-10,false);
+            if(landscape)explanation(g,mapW+12,0,w-mapW-12,h,false);else if(h>=380)explanation(g,0,mapH+10,w,h-mapH-10,false);
         }
         private void navigationMap(Graphics2D original,int x,int y,int w,int h){
             card(original,x,y,w,h);Graphics2D g=(Graphics2D)original.create();g.translate(x,y);g.clip(new RoundRectangle2D.Double(1,1,w-2,h-2,18,18));
             String title=destination==null?"LOCAL MISSION":destination.airport().id()+"  /  "+destination.airport().name();
             g.setFont(font(21,Font.BOLD));text(g,ellipsize(g,title,w-34),16,30,21,INK,true);
             double distance=PilotDisplayModel.distance(data,destination);
-            text(g,number(distance/1000,"%.1f km")+"  ·  ETA "+PilotDisplayModel.eta(data,destination)+" at current GS",16,54,13,MUTED,false);
-            if(data==null||data.origin()==null||data.telemetry().pos==null){text(g,"Route appears with aircraft position",22,h/2,18,MUTED,false);g.dispose();return;}
-            var origin=data.origin();var pos=data.telemetry().pos;double pn=ExplainabilityModel.north(pos,origin),pe=ExplainabilityModel.east(pos,origin);
-            List<double[]> route=new ArrayList<>();route.add(new double[]{0,0});for(var p:data.route())route.add(new double[]{p.north,p.east});
-            if(destination!=null){route.clear();route.add(new double[]{pn,pe});route.add(local(destination,origin));}
-            double[] alt=alternate==null?null:local(alternate,origin);
-            double minN=pn,maxN=pn,minE=pe,maxE=pe;
-            for(var p:route){minN=Math.min(minN,p[0]);maxN=Math.max(maxN,p[0]);minE=Math.min(minE,p[1]);maxE=Math.max(maxE,p[1]);}
-            if(alt!=null){minN=Math.min(minN,alt[0]);maxN=Math.max(maxN,alt[0]);minE=Math.min(minE,alt[1]);maxE=Math.max(maxE,alt[1]);}
-            int top=76,bottom=h-42;double scale=Math.min((w-100)/Math.max(120,maxE-minE),(bottom-top-28)/Math.max(120,maxN-minN));
-            double centreN=(minN+maxN)/2,centreE=(minE+maxE)/2,cx=w/2.0,cy=(top+bottom)/2.0;
-            g.setColor(LINE);g.setStroke(new BasicStroke(1));for(int i=1;i<6;i++){g.drawLine(i*w/6,top,i*w/6,bottom);g.drawLine(14,top+i*(bottom-top)/6,w-14,top+i*(bottom-top)/6);}
-            text(g,"N ↑",w-44,top-8,12,MUTED,true);
-            Path2D track=new Path2D.Double();boolean first=true;for(var s:data.samples())if(Double.isFinite(s.north())&&Double.isFinite(s.east())){double px=cx+(s.east()-centreE)*scale,py=cy-(s.north()-centreN)*scale;if(first){track.moveTo(px,py);first=false;}else track.lineTo(px,py);}
-            g.setColor(new Color(66,102,122));g.setStroke(new BasicStroke(2));g.draw(track);
-            g.setColor(CYAN);g.setStroke(new BasicStroke(3));for(int i=1;i<route.size();i++){var a=route.get(i-1);var b=route.get(i);g.draw(new Line2D.Double(cx+(a[1]-centreE)*scale,cy-(a[0]-centreN)*scale,cx+(b[1]-centreE)*scale,cy-(b[0]-centreN)*scale));}
-            if(route.size()>1){var p=route.get(route.size()-1);int dx=(int)(cx+(p[1]-centreE)*scale),dy=(int)(cy-(p[0]-centreN)*scale);g.setColor(CYAN);g.fillRoundRect(dx-7,dy-7,14,14,3,3);text(g,destination==null?"HOME / TARGET":destination.airport().id(),Math.min(w-80,dx+12),dy-10,13,INK,true);}
-            if(alt!=null){double ax=cx+(alt[1]-centreE)*scale,ay=cy-(alt[0]-centreN)*scale;g.setColor(AMBER);g.setStroke(new BasicStroke(2,0,0,1,new float[]{7,7},0));g.draw(new Line2D.Double(cx+(pe-centreE)*scale,cy-(pn-centreN)*scale,ax,ay));g.fill(new Ellipse2D.Double(ax-6,ay-6,12,12));text(g,alternate.airport().id()+" ALT",(int)Math.min(w-100,ax+12),(int)ay-10,13,AMBER,true);}
-            Graphics2D plane=(Graphics2D)g.create();plane.translate(cx+(pe-centreE)*scale,cy-(pn-centreN)*scale);plane.rotate(Math.toRadians(pos.heading));plane.setColor(data.telemetry().fresh()?INK:MUTED);plane.fill(new Polygon(new int[]{0,-10,0,10},new int[]{-16,12,7,12},4));plane.dispose();
-            String caption=alt==null?"NORTH UP · POSITION ONLY · NO TERRAIN":String.format(Locale.ROOT,"ALT %s · %s km · AMBER PREVIEW ONLY",alternate.airport().id(),number(data.telemetry().fresh()?alternate.distance(pos)/1000:Double.NaN,"%.1f"));
-            text(g,caption,16,h-20,11,alt==null?MUTED:AMBER,true);
-            if(!data.telemetry().fresh())text(g,"LAST KNOWN POSITION",16,top+15,14,AMBER,true);g.dispose();
+            String subtitle=destination!=null?number(distance/1000,"%.1f km")+"  ·  ETA "+PilotDisplayModel.eta(data,destination)+" at current GS":data!=null&&data.telemetry().pos!=null?String.format(Locale.ROOT,"%.5f°, %.5f°",data.telemetry().pos.lat,data.telemetry().pos.lon):"Waiting for live position";
+            text(g,subtitle,16,54,13,MUTED,false);
+            text(g,alternate==null?"DASHED PLAN · SOLID RECENT TRACK · NORTH UP":"AMBER = ALTERNATE PREVIEW ONLY",16,h-9,11,alternate==null?MUTED:AMBER,true);g.dispose();
         }
+        private int mapHeight(int w,int h){return w>850||h<380?h:Math.max(220,(int)(h*.65));}
         private void explanation(Graphics2D g,int x,int y,int w,int h,boolean expanded){
             if(h<80)return;card(g,x,y,w,h);var d=PilotDisplayModel.decision(data);int inset=16,yy=y+25;
             text(g,"WHY THIS ACTION",x+inset,yy,12,CYAN,true);yy+=28;
@@ -314,7 +302,7 @@ final class PilotDisplay extends JPanel {
             weatherRow(g,w,yy,row,"WINDSHIELD RAIN",Double.isFinite(weather.rainRatio())?(weather.rainRatio()<.01?"None":number(weather.rainRatio()*100,"%.0f%% wetness")):"UNAVAILABLE",Double.isFinite(weather.rainRatio()));
             if(yy+row+45<h)wrap(g,"Unavailable weather stays blank. This display does not assess weather suitability or forecast the route.",18,yy+row+25,w-36,14,MUTED,2);
         }
-        private void weatherTile(Graphics2D g,int x,int y,int w,int h,String title,String value,boolean available){g.setColor(new Color(23,43,61));g.fillRoundRect(x,y,w,h,12,12);text(g,title,x+12,y+23,11,MUTED,true);g.setFont(font(w<240?22:26,Font.BOLD));text(g,ellipsize(g,value,w-24),x+12,y+Math.min(62,h-12),w<240?22:26,available?INK:MUTED,true);}
+        private void weatherTile(Graphics2D g,int x,int y,int w,int h,String title,String value,boolean available){g.setColor(PilotTheme.SELECTED);g.fillRoundRect(x,y,w,h,12,12);text(g,title,x+12,y+23,11,MUTED,true);g.setFont(font(w<240?22:26,Font.BOLD));text(g,ellipsize(g,value,w-24),x+12,y+Math.min(62,h-12),w<240?22:26,available?INK:MUTED,true);}
         private void weatherRow(Graphics2D g,int w,int y,int h,String title,String value,boolean available){g.setColor(LINE);g.drawLine(18,y+h-4,w-18,y+h-4);text(g,title,18,y+17,12,MUTED,true);text(g,value,18,y+50,w<600?27:31,available?INK:MUTED,true);}
     }
     private static double[] local(AirportPlan plan,NativeLink.Position origin){return new double[]{Math.toRadians(plan.site().latitude()-origin.lat)*6371000,Math.toRadians(HoverMission.wrap(plan.site().longitude()-origin.lon))*6371000*Math.cos(Math.toRadians(origin.lat))};}
@@ -327,16 +315,16 @@ final class PilotDisplay extends JPanel {
         JTextArea note=new JTextArea("Preview only — the active mission stays unchanged.\nSearch airports with paved landing sites at least 25 m across.");note.setEditable(false);note.setLineWrap(true);note.setWrapStyleWord(true);note.setFont(font(16,Font.PLAIN));note.setForeground(MUTED);note.setBackground(BG);heading.add(note,BorderLayout.CENTER);
         JTextField query=new JTextField();query.setFont(font(22,Font.PLAIN));query.setPreferredSize(new Dimension(400,52));heading.add(query,BorderLayout.SOUTH);content.add(heading,BorderLayout.NORTH);
         DefaultListModel<AirportDatabase.Airport> items=new DefaultListModel<>();JList<AirportDatabase.Airport> list=new JList<>(items);list.setBackground(CARD);list.setForeground(INK);list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);list.setFixedCellHeight(78);
-        list.setCellRenderer((view,a,index,selected,focus)->{JPanel p=new JPanel(new GridLayout(2,1));p.setBorder(new EmptyBorder(8,12,8,12));p.setBackground(selected?new Color(27,66,88):CARD);p.add(label(a.id()+"  /  "+a.name(),19,Font.BOLD,INK));var site=a.sites().stream().filter(AirportDatabase.Site::preferred).findFirst().orElse(null);NativeLink.Position pos=data==null?null:data.telemetry().pos;String distance=pos==null?"":String.format(Locale.ROOT,"%.1f km · ",AirportDatabase.distance(pos.lat,pos.lon,a.latitude(),a.longitude())/1000);p.add(label(distance+(site==null?"No eligible site":site.description()),13,Font.PLAIN,MUTED));return p;});
+        list.setCellRenderer((view,a,index,selected,focus)->{JPanel p=new JPanel(new GridLayout(2,1));p.setBorder(new EmptyBorder(8,12,8,12));p.setBackground(selected?PilotTheme.SELECTED:CARD);p.add(label(a.id()+"  /  "+a.name(),19,Font.BOLD,INK));var site=a.sites().stream().filter(AirportDatabase.Site::preferred).findFirst().orElse(null);NativeLink.Position pos=data==null?null:data.telemetry().pos;String distance=pos==null?"":String.format(Locale.ROOT,"%.1f km · ",AirportDatabase.distance(pos.lat,pos.lon,a.latitude(),a.longitude())/1000);p.add(label(distance+(site==null?"No eligible site":site.description()),13,Font.PLAIN,MUTED));return p;});
         JScrollPane scroll=new JScrollPane(list);scroll.setBorder(BorderFactory.createLineBorder(LINE));content.add(scroll,BorderLayout.CENTER);
         JLabel status=label("Loading installed airports…",14,Font.PLAIN,MUTED);
-        JButton choose=button("Preview route",()->{var a=list.getSelectedValue();if(a==null)return;var site=a.sites().stream().filter(AirportDatabase.Site::preferred).findFirst().orElseThrow();alternate=new AirportPlan(a,site,destination==null?300:destination.cruiseClearanceM(),destination==null?90:destination.cruiseKnots());showPage("Navigation");dialog.dispose();},new Color(30,70,101),INK);choose.setEnabled(false);
+        JButton choose=button("Preview route",()->{var a=list.getSelectedValue();if(a==null)return;var site=a.sites().stream().filter(AirportDatabase.Site::preferred).findFirst().orElseThrow();alternate=new AirportPlan(a,site,destination==null?300:destination.cruiseClearanceM(),destination==null?90:destination.cruiseKnots());refresh();showPage("Navigation");dialog.dispose();},PilotTheme.SELECTED,INK);choose.setEnabled(false);
         JPanel buttons=panel(new GridLayout(1,3,8,0));buttons.add(button("Cancel",dialog::dispose,CARD,INK));buttons.add(button("Clear preview",()->{alternate=null;screen.repaint();dialog.dispose();},CARD,INK));buttons.add(choose);buttons.setPreferredSize(new Dimension(560,58));
         JPanel south=panel(new BorderLayout(0,12));south.add(status,BorderLayout.NORTH);south.add(buttons,BorderLayout.SOUTH);content.add(south,BorderLayout.SOUTH);
         Runnable filter=()->{items.clear();if(database==null)return;var pos=data==null?null:data.telemetry().pos;for(var a:database.search(query.getText(),pos,80,true,true))items.addElement(a);if(!items.isEmpty())list.setSelectedIndex(0);choose.setEnabled(!items.isEmpty());status.setText(items.size()+" alternatives · 3D scenery · preview does not command a diversion");};
         list.addListSelectionListener(e->choose.setEnabled(list.getSelectedValue()!=null));javax.swing.Timer debounce=new javax.swing.Timer(200,e->filter.run());debounce.setRepeats(false);
         query.getDocument().addDocumentListener(new javax.swing.event.DocumentListener(){public void insertUpdate(javax.swing.event.DocumentEvent e){debounce.restart();}public void removeUpdate(javax.swing.event.DocumentEvent e){debounce.restart();}public void changedUpdate(javax.swing.event.DocumentEvent e){debounce.restart();}});
-        dialog.setContentPane(content);dialog.setSize(Math.min(680,getWidth()+40),680);dialog.setLocationRelativeTo(window);dialog.setVisible(true);
+        PilotTheme.apply(content);dialog.setContentPane(content);dialog.setSize(Math.min(680,getWidth()+40),680);dialog.setLocationRelativeTo(window);dialog.setVisible(true);
         Path root;try{root=sceneryRoot.get().toAbsolutePath().normalize();}catch(Exception ex){status.setText("Check the X-Plane folder in Mission planner.");return;}
         if(database!=null&&root.equals(databaseRoot)){filter.run();return;}
         new SwingWorker<AirportDatabase,Void>(){protected AirportDatabase doInBackground() throws Exception{return AirportDatabase.load(root);}protected void done(){try{database=get();databaseRoot=root;filter.run();}catch(Exception ex){status.setText("Airports unavailable. Check the X-Plane folder in Mission planner.");}}}.execute();

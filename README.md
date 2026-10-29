@@ -11,6 +11,7 @@ This isolated research branch starts from the saved ALIA pilot-display version a
 .\run-research.cmd test     # Research and inherited controller checks
 .\run-research.cmd monitor  # Existing flight controls + pilot display + braking shadow window
 .\run-soar-demo.cmd -Live  # Sensors: live simulated instruments and separate warning lab
+.\run-soar-demo.cmd -Live -Maps # Open pilot Navigation and explainability maps together
 ```
 
 `monitor` and `-Live` do not start automatic flight. Start a reviewed mission separately in Flight controls. The braking shadow observer predicts only during the existing airport approach and has no actuator or destination-writing interface. It shows point estimates to rotor capture, not touchdown. Uncertainty is explicitly unqualified; validation residual bands failed held-out coverage. The new hover trials do not validate cruise, airport approach or the braking model.
@@ -24,6 +25,7 @@ The existing `run-pilot.cmd` and `run-alia.cmd` still use the baseline controlle
 - [Braking pilot results and limitations](research/reports/braking-pilot-results.md)
 - [Actual hover trials, sensor findings and Soar replay](research/reports/live-hover-sensor-pilot.md)
 - [Live instrument and experiment commands](research/soar/LIVE_INSTRUMENTS.md)
+- [2D basemap, controls and charcoal tablet palette](research/reports/maps-and-tablet-theme.md)
 - [Repeatable approach experiment](research/experiments/approach-baseline.md)
 - [Pilot authority specification](research/authority/authority-requirements.md)
 - [Prediction contracts](research/prediction/README.md)

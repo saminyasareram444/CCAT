@@ -56,11 +56,11 @@ final class SensorLabPanel extends JPanel {
         liveInstruments.setVerticalAlignment(SwingConstants.TOP);liveInstruments.setFont(new Font("Segoe UI",Font.PLAIN,17));liveInstruments.setForeground(PilotDisplay.INK);liveInstruments.setBorder(new EmptyBorder(18,18,18,18));liveInstruments.setOpaque(true);liveInstruments.setBackground(PilotDisplay.CARD);
         JScrollPane instrumentScroll=new JScrollPane(liveInstruments);instrumentScroll.getVerticalScrollBar().setUnitIncrement(30);instrumentScroll.setBorder(null);
         pages.setFont(new Font("Segoe UI",Font.BOLD,16));pages.addTab("Live instruments",instrumentScroll);pages.addTab("Warning lab",scroll);pages.setSelectedIndex(1);add(pages);
-        update();
+        PilotTheme.apply(this);update();
     }
     private static void style(JLabel l,int size,Color color,boolean bold){l.setFont(new Font("Segoe UI",bold?Font.BOLD:Font.PLAIN,size));l.setForeground(color);}
     private static void addLabel(JPanel p,String text,int size,Color color,boolean bold){JLabel l=new JLabel("<html>"+html(text)+"</html>");style(l,size,color,bold);l.setAlignmentX(LEFT_ALIGNMENT);l.setBorder(new EmptyBorder(3,0,3,0));p.add(l);}
-    private static JButton button(String text,Runnable action){JButton b=new JButton(text);b.setFont(new Font("Segoe UI",Font.BOLD,14));b.setBackground(new Color(30,70,101));b.setForeground(PilotDisplay.INK);b.setFocusPainted(false);b.setPreferredSize(new Dimension(170,42));b.addActionListener(e->action.run());return b;}
+    private static JButton button(String text,Runnable action){JButton b=new JButton(text);b.setFont(new Font("Segoe UI",Font.BOLD,14));b.setBackground(PilotTheme.SELECTED);b.setForeground(PilotDisplay.INK);PilotTheme.button(b);b.setPreferredSize(new Dimension(170,42));b.addActionListener(e->action.run());return b;}
     private void invoke(Runnable action){try{action.run();}catch(RuntimeException e){status.setText(e.getMessage());}}
     private void submit(){List<SensorResearch.Input> values=new ArrayList<>();for(var s:SensorResearch.Sensor.values()){
         try{errors.get(s).commitEdit();}catch(java.text.ParseException e){status.setText("Enter a numeric error proxy from 0 to 20");return;}

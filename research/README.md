@@ -35,6 +35,8 @@ Python 3.10+ and the existing JDK are sufficient; the Python pipeline uses only 
 
 ## Read next
 
+- [Geographic basemaps and charcoal pilot theme](reports/maps-and-tablet-theme.md)
+
 - [Data-readiness summary](reports/data-readiness-summary.md)
 - [Pilot experiment results](reports/braking-pilot-results.md)
 - [Repeatable baseline protocol](experiments/approach-baseline.md)

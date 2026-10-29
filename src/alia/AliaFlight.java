@@ -351,6 +351,6 @@ public final class AliaFlight {
         boolean openPilot=Arrays.asList(args).contains("--pilot");
         boolean openShadow=Arrays.asList(args).contains("--braking-shadow");
         boolean openSensorLab=Arrays.asList(args).contains("--sensor-lab");
-        SwingUtilities.invokeLater(()->new AliaFlight(openTelemetry,openDashboard,openPilot,openShadow,openSensorLab));
+        SwingUtilities.invokeLater(()->{var application=new AliaFlight(openTelemetry,openDashboard,openPilot,openShadow,openSensorLab);if(Arrays.asList(args).contains("--navigation"))application.pilot.showPage("Navigation");});
     }
 }

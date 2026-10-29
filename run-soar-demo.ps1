@@ -1,6 +1,7 @@
-param([switch]$Live,[switch]$Test,[switch]$Render,[switch]$RenderLive,[switch]$InstallDependencies,[switch]$HoverTrial,[switch]$Preflight,[string[]]$ReplayFlights)
+param([switch]$Live,[switch]$Test,[switch]$Render,[switch]$RenderLive,[switch]$InstallDependencies,[switch]$HoverTrial,[switch]$Preflight,[string[]]$ReplayFlights,[switch]$Maps)
 $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath $PSScriptRoot
+if($Maps -and -not $Live){throw 'Maps is a display option for -Live; it does not start a flight.'}
 if (@(@($Live,$Test,$Render,$RenderLive,$HoverTrial,$Preflight,[bool]$ReplayFlights) | Where-Object { $_ }).Count -gt 1) { throw 'Select one mode: Live, Test, Render, RenderLive, Preflight, HoverTrial or ReplayFlights.' }
 $jdkBin = $null
 $compiler = Get-Command javac.exe -ErrorAction SilentlyContinue
@@ -42,7 +43,7 @@ elseif ($Preflight) { $main = 'alia.LiveHoverTrial'; $appArgs += '--preflight' }
 elseif ($HoverTrial) { $main = 'alia.LiveHoverTrial'; $appArgs += '--execute' }
 elseif ($ReplayFlights) { $main = 'alia.SensorReplayExperiment'; $appArgs += $ReplayFlights }
 elseif ($Render) { $appArgs += '--render' }
-elseif ($Live) { $main = 'alia.AliaFlight'; $appArgs += '--pilot','--sensor-lab' }
+elseif ($Live) { $main = 'alia.AliaFlight'; $appArgs += '--pilot','--sensor-lab'; if($Maps){$appArgs += '--dashboard','--navigation'} }
 $commit='UNKNOWN'
 $dirty='UNKNOWN'
 $git = Get-Command git.exe -ErrorAction SilentlyContinue

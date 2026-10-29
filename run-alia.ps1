@@ -1,4 +1,4 @@
-param([switch]$Test, [switch]$Probe, [switch]$Recover, [switch]$BuildOnly, [switch]$Telemetry, [switch]$Dashboard, [switch]$Pilot, [switch]$PilotPreview, [switch]$DashboardPreview, [switch]$PlannerPreview, [switch]$AirportIndexCheck, [switch]$BrakingShadow)
+param([switch]$Test, [switch]$Probe, [switch]$Recover, [switch]$BuildOnly, [switch]$Telemetry, [switch]$Dashboard, [switch]$Pilot, [switch]$PilotPreview, [switch]$DashboardPreview, [switch]$PlannerPreview, [switch]$AirportIndexCheck, [switch]$BrakingShadow, [switch]$MapPreview)
 $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath $PSScriptRoot
 
@@ -29,6 +29,7 @@ if ($Test) { & (Join-Path $jdkBin 'java.exe') -cp $classes alia.AliaTests }
 elseif ($Probe) { & (Join-Path $jdkBin 'java.exe') -cp $classes alia.AliaFlight --probe }
 elseif ($Recover) { & (Join-Path $jdkBin 'java.exe') -cp $classes alia.AliaFlight --recover }
 elseif ($DashboardPreview) { & (Join-Path $jdkBin 'java.exe') -cp $classes alia.DashboardPreview }
+elseif ($MapPreview) { & (Join-Path $jdkBin 'java.exe') -cp $classes alia.MapPreview }
 elseif ($PilotPreview) { & (Join-Path $jdkBin 'java.exe') -cp $classes alia.PilotPreview }
 elseif ($PlannerPreview) { & (Join-Path $jdkBin 'java.exe') -cp $classes alia.PlannerPreview }
 elseif ($AirportIndexCheck) { & (Join-Path $jdkBin 'java.exe') -cp $classes alia.PlannerPreview --index }

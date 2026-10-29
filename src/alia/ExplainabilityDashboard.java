@@ -35,10 +35,10 @@ final class ExplainabilityDashboard extends JPanel {
     private final DefaultTableModel traceTable=new DefaultTableModel(new String[]{"Controller term","Actual value","Definition / units"},0){
         public boolean isCellEditable(int r,int c){return false;}
     };
-    private final RouteView map=new RouteView();
+    private final FlightPathMap map=new FlightPathMap(false);
     private final TrendView heightChart=new TrendView(0),liftChart=new TrendView(1),attitudeChart=new TrendView(2),batteryPowerChart=new TrendView(3),batteryChargeChart=new TrendView(4);
     private final Meter limitMeter=new Meter();
-    private final JLabel destinationCaption=new JLabel("Local metres · north up · route shown after mission start");
+    private final JLabel destinationCaption=new JLabel("Street map · north up · waiting for position");
     private JTabbedPane responseTabs;
 
     ExplainabilityDashboard(Runnable controls,Runnable telemetry,Runnable pause,Runnable clear) {
@@ -147,7 +147,7 @@ final class ExplainabilityDashboard extends JPanel {
         batteryCharge.setToolTipText("Remaining energy "+fmt(f.battery().remainingKwh(),"%.1f kWh")+"; signed electrical power "+fmt(f.battery().powerKw(),"%.1f kW")+"; weakest pack "+fmt(f.battery().minimumPercent(),"%.0f%%"));
         target.setText(f.output()==null?"—":fmt(f.output().distance,"%.1f m"));
         String code=f.limits().destination().split(" — ",2)[0];
-        destinationCaption.setText(f.limits().destination().startsWith("Hover test")?"Local metres · north up · home = takeoff point":"Destination: "+code+" · north up · local metres");
+        destinationCaption.setText(f.limits().destination().startsWith("Hover test")?"Street map · north up · home = takeoff point":"Destination: "+code+" · north up · street map");
         destinationCaption.setToolTipText(f.limits().destination());
         renderReasons(f);
         gate.setText(f.output()!=null&&f.output().trace!=null?f.output().trace.gate:
@@ -169,7 +169,7 @@ final class ExplainabilityDashboard extends JPanel {
         }else traceGate.setText("No current controller step. Monitoring does not fabricate decision terms.");
         footer.setText(f.systemEvent().contains("log unavailable")?f.systemEvent():
             "Measured telemetry + deterministic controller trace  ·  IMU/LiDAR comparison and learned confidence unavailable  ·  Logs: logs/alia/xai-*.jsonl");
-        factors.revalidate();map.repaint();heightChart.repaint();liftChart.repaint();attitudeChart.repaint();batteryPowerChart.repaint();batteryChargeChart.repaint();limitMeter.repaint();
+        factors.revalidate();map.update(f,null,null);heightChart.repaint();liftChart.repaint();attitudeChart.repaint();batteryPowerChart.repaint();batteryChargeChart.repaint();limitMeter.repaint();
     }
     private void renderReasons(ExplainabilityModel.Frame f) {
         headline.setText(html(f.headline(),300));reason.setText(f.rationale());factors.removeAll();
@@ -262,31 +262,6 @@ final class ExplainabilityDashboard extends JPanel {
             x.setColor(BG);x.fillRoundRect(0,24,w,10,8,8);x.setColor(Double.isFinite(use)&&use>=.75?AMBER:TEAL);
             if(Double.isFinite(use))x.fillRoundRect(0,24,(int)(Math.min(1,use)*w),10,8,8);
             x.setColor(MUTED);x.drawString("0",0,49);x.drawString("caution 75%",w/2,49);x.drawString("limit",w-24,49);x.dispose();}
-    }
-    private final class RouteView extends JPanel {
-        RouteView(){setBackground(new Color(246,249,253));setPreferredSize(new Dimension(430,260));}
-        protected void paintComponent(Graphics g){super.paintComponent(g);Graphics2D x=graphics(g);int w=getWidth(),h=getHeight();
-            double extent=30;
-            if(data!=null){for(var p:data.route())extent=Math.max(extent,Math.max(Math.abs(p.north),Math.abs(p.east))+15);
-                for(var p:data.samples())extent=Math.max(extent,Math.max(Math.abs(p.north()),Math.abs(p.east()))+10);}
-            double scale=Math.min(w-50,h-55)/(2*extent);int cx=w/2,cy=h/2+7;
-            x.setColor(LINE);for(int i=-2;i<=2;i++){int offset=(int)(i*extent/2*scale);x.drawLine(20,cy+offset,w-20,cy+offset);x.drawLine(cx+offset,22,cx+offset,h-20);}
-            x.setColor(MUTED);x.drawString("N ↑",w-38,17);x.drawString("E →",w-38,h-8);x.drawString(String.format(Locale.ROOT,"Grid %.0f m",extent/2),10,h-8);
-            if(data==null||data.origin()==null){x.drawString("Waiting for position",Math.max(20,cx-55),cy);x.dispose();return;}
-            x.setStroke(new BasicStroke(1.5f,BasicStroke.CAP_ROUND,BasicStroke.JOIN_ROUND,1,new float[]{5,5},0));x.setColor(new Color(149,174,203));
-            int px=cx,py=cy,count=1;for(var point:data.route()){int xx=cx+(int)(point.east*scale),yy=cy-(int)(point.north*scale);x.drawLine(px,py,xx,yy);x.fillOval(xx-4,yy-4,8,8);x.drawString("W"+count++,xx+7,yy-5);px=xx;py=yy;}if(!data.route().isEmpty())x.drawLine(px,py,cx,cy);
-            x.setStroke(new BasicStroke(2.3f));x.setColor(BLUE);Path2D path=new Path2D.Double();boolean first=true;
-            double previous=Double.NaN;
-            for(var p:data.samples()){double xx=cx+p.east()*scale,yy=cy-p.north()*scale;
-                if(first||p.seconds()-previous>1){path.moveTo(xx,yy);first=false;}else path.lineTo(xx,yy);previous=p.seconds();}x.draw(path);
-            if(data.output()!=null&&data.output().trace!=null) {
-                var t=data.output().trace.target;int xx=cx+(int)(t.east*scale),yy=cy-(int)(t.north*scale);
-                x.setColor(AMBER);x.setStroke(new BasicStroke(2));x.drawOval(xx-9,yy-9,18,18);
-            }
-            x.setColor(TEAL);x.fillOval(cx-5,cy-5,10,10);x.drawString("HOME",cx+9,cy+15);
-            if(data.telemetry().pos!=null){var p=data.telemetry().pos;double xx=cx+ExplainabilityModel.east(p,data.origin())*scale,yy=cy-ExplainabilityModel.north(p,data.origin())*scale;
-                x.translate(xx,yy);x.rotate(Math.toRadians(p.heading));x.setColor(data.telemetry().fresh()?BLUE:MUTED);x.fillPolygon(new int[]{0,-7,0,7},new int[]{-13,9,5,9},4);}
-            x.dispose();}
     }
     private final class TrendView extends JPanel {
         private final int kind;
